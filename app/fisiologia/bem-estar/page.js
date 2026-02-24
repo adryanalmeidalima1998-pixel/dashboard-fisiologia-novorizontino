@@ -60,14 +60,24 @@ export default function BemEstarPage() {
   const [selectedAtleta, setSelectedAtleta] = useState('Todos')
   const [filterPosition, setFilterPosition] = useState('')
   const [activeTab, setActiveTab] = useState('pre') // 'pre' | 'post' | 'dor'
+  const [lastUpdated, setLastUpdated] = useState(null)
 
   const availablePositions = useMemo(() => {
     const set = new Set(Object.values(playerPositions).filter(Boolean))
     return Array.from(set).sort()
   }, [playerPositions])
 
+  // Sempre rebusca ao entrar na página para pegar respostas novas
   useEffect(() => {
-    if (bemEstarData.length === 0) fetchBemEstar()
+    fetchBemEstar()
+  }, [])
+
+  // Auto-refresh a cada 30 segundos: atletas respondem e o dash atualiza sozinho
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchBemEstar()
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   // Datas disponíveis
@@ -105,7 +115,9 @@ export default function BemEstarPage() {
     const media = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null
     const srpes = postData.map(r => r.srpe).filter(Boolean)
     const mediaSrpe = srpes.length > 0 ? srpes.reduce((a, b) => a + b, 0) / srpes.length : null
-    return { total: preData.length, alertas: alertas.length, comDor: comDor.length, media, mediaSrpe }
+    // Total = atletas únicos que responderam qualquer formulário no dia
+    const nomesUnicos = new Set([...preData.map(r => r.playerName), ...postData.map(r => r.playerName)])
+    return { total: nomesUnicos.size, preTotal: preData.length, postTotal: postData.length, alertas: alertas.length, comDor: comDor.length, media, mediaSrpe }
   }, [preData, postData])
 
   // Atletas com dor (para aba dor)
@@ -130,9 +142,12 @@ export default function BemEstarPage() {
             <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">
               ← VOLTAR
             </button>
-            <button onClick={fetchBemEstar} disabled={isLoadingBemEstar} className="bg-amber-500 text-black px-3 py-1 rounded-md text-xs font-black hover:bg-amber-400 transition-colors disabled:opacity-50">
-              {isLoadingBemEstar ? 'Carregando...' : '↻ Atualizar'}
-            </button>
+            <div className="flex flex-col items-end gap-0.5">
+              <button onClick={async () => { await fetchBemEstar(); setLastUpdated(new Date()) }} disabled={isLoadingBemEstar} className="bg-amber-500 text-black px-3 py-1 rounded-md text-xs font-black hover:bg-amber-400 transition-colors disabled:opacity-50">
+                {isLoadingBemEstar ? '⟳ Carregando...' : '↻ Atualizar'}
+              </button>
+              {lastUpdated && <span className="text-[9px] text-slate-400 font-medium">atualizado {lastUpdated.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>}
+            </div>
           </div>
         </header>
 
@@ -178,12 +193,12 @@ export default function BemEstarPage() {
         </div>
 
         {/* RESUMO */}
-        {preData.length > 0 && (
+        {(preData.length > 0 || postData.length > 0) && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Responderam</p>
               <p className="text-2xl font-black text-black">{stats.total}</p>
-              <p className="text-[10px] text-slate-500">atletas hoje</p>
+              <p className="text-[10px] text-slate-500">{stats.preTotal} pré · {stats.postTotal} pós</p>
             </div>
             <div className={`border rounded-xl p-3 ${stats.alertas > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Alertas</p>
@@ -404,7 +419,7 @@ export default function BemEstarPage() {
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 bg-amber-500 rounded-full" />
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-              Dados via Google Sheets · Wellness = média(sono, 6-fadiga, 6-doms, 6-estresse, humor)
+              Dados via Google Sheets · Wellness = média(sono, 6-fadiga, 6-doms, 6-estresse, humor) · Auto-refresh 30s
             </span>
           </div>
           <p className="text-[10px] text-slate-500 font-black italic tracking-tight uppercase">© Fisiologia GN</p>
