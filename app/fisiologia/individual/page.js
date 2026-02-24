@@ -22,48 +22,50 @@ const DOR_LABELS = {
   'P': 'Cervical', 'Q': 'Cotovelo E', 'R': 'Cotovelo D',
 }
 
-// Coordenadas dos pontos de dor no SVG (viewBox "0 0 500 440")
-// x 0-250 = frente | x 250-500 = costas
+// Coordenadas dos pontos de dor — boneco realista (viewBox "0 0 500 430")
+// x 0-250 = frente (centro 125) | x 250-500 = costas (centro 375)
 const ANATOMY_POINTS = {
-  'P': { x: 125, y: 68, label: 'Cervical' },
-  'L': { x: 178, y: 108, label: 'Deltoide D' },
-  'M': { x: 72, y: 108, label: 'Deltoide E' },
-  '15': { x: 148, y: 138, label: 'Peitoral D' },
-  '16': { x: 102, y: 138, label: 'Peitoral E' },
-  'A': { x: 125, y: 163, label: 'Abdome' },
-  '19': { x: 192, y: 145, label: 'Bíceps D' },
-  '20': { x: 58, y: 145, label: 'Bíceps E' },
-  'R': { x: 197, y: 178, label: 'Cotovelo D' },
-  'Q': { x: 53, y: 178, label: 'Cotovelo E' },
-  'N': { x: 200, y: 210, label: 'Punho D' },
-  'O': { x: 50, y: 210, label: 'Punho E' },
-  '13': { x: 148, y: 208, label: 'Flex. Quadril D' },
-  '14': { x: 102, y: 208, label: 'Flex. Quadril E' },
-  '1': { x: 150, y: 262, label: 'Ant. Coxa D' },
-  '2': { x: 100, y: 262, label: 'Ant. Coxa E' },
-  '3': { x: 140, y: 252, label: 'Adutor D' },
-  '4': { x: 110, y: 252, label: 'Adutor E' },
-  'B': { x: 150, y: 315, label: 'Joelho Ant. D' },
-  'C': { x: 100, y: 315, label: 'Joelho Ant. E' },
-  '5': { x: 150, y: 352, label: 'Tibial Ant. D' },
-  '6': { x: 100, y: 352, label: 'Tibial Ant. E' },
-  'D': { x: 150, y: 390, label: 'Tornozelo D' },
-  'E': { x: 100, y: 390, label: 'Tornozelo E' },
-  '18': { x: 348, y: 132, label: 'Dorso D' },
-  '17': { x: 302, y: 132, label: 'Dorso E' },
-  'F': { x: 375, y: 168, label: 'Lombar' },
-  '22': { x: 438, y: 145, label: 'Tríceps D' },
-  '21': { x: 312, y: 145, label: 'Tríceps E' },
-  '12': { x: 348, y: 210, label: 'Glúteo D' },
-  '11': { x: 302, y: 210, label: 'Glúteo E' },
-  '7': { x: 348, y: 262, label: 'Post. Coxa D' },
-  '8': { x: 302, y: 262, label: 'Post. Coxa E' },
-  'H': { x: 348, y: 315, label: 'Joelho Post. D' },
-  'G': { x: 302, y: 315, label: 'Joelho Post. E' },
-  '9': { x: 348, y: 352, label: 'Panturrilha D' },
-  '10': { x: 302, y: 352, label: 'Panturrilha E' },
-  'J': { x: 348, y: 390, label: 'Tendão Calc. D' },
-  'I': { x: 302, y: 390, label: 'Tendão Calc. E' },
+  // ── FRENTE ────────────────────────────────────────────────────
+  'P':  { x: 125, y: 66,  label: 'Cervical' },
+  'L':  { x: 174, y: 88,  label: 'Deltoide D' },
+  'M':  { x: 76,  y: 88,  label: 'Deltoide E' },
+  '15': { x: 147, y: 118, label: 'Peitoral D' },
+  '16': { x: 103, y: 118, label: 'Peitoral E' },
+  'A':  { x: 125, y: 155, label: 'Abdome' },
+  '19': { x: 198, y: 116, label: 'Bíceps D' },
+  '20': { x: 52,  y: 116, label: 'Bíceps E' },
+  'R':  { x: 204, y: 160, label: 'Cotovelo D' },
+  'Q':  { x: 46,  y: 160, label: 'Cotovelo E' },
+  'N':  { x: 202, y: 202, label: 'Punho D' },
+  'O':  { x: 48,  y: 202, label: 'Punho E' },
+  '13': { x: 143, y: 213, label: 'Flex. Quadril D' },
+  '14': { x: 107, y: 213, label: 'Flex. Quadril E' },
+  '1':  { x: 143, y: 268, label: 'Ant. Coxa D' },
+  '2':  { x: 107, y: 268, label: 'Ant. Coxa E' },
+  '3':  { x: 136, y: 255, label: 'Adutor D' },
+  '4':  { x: 114, y: 255, label: 'Adutor E' },
+  'B':  { x: 145, y: 322, label: 'Joelho Ant. D' },
+  'C':  { x: 105, y: 322, label: 'Joelho Ant. E' },
+  '5':  { x: 144, y: 362, label: 'Tibial Ant. D' },
+  '6':  { x: 106, y: 362, label: 'Tibial Ant. E' },
+  'D':  { x: 145, y: 400, label: 'Tornozelo D' },
+  'E':  { x: 105, y: 400, label: 'Tornozelo E' },
+  // ── COSTAS ────────────────────────────────────────────────────
+  '18': { x: 395, y: 118, label: 'Dorso D' },
+  '17': { x: 355, y: 118, label: 'Dorso E' },
+  'F':  { x: 375, y: 165, label: 'Lombar' },
+  '22': { x: 449, y: 116, label: 'Tríceps D' },
+  '21': { x: 301, y: 116, label: 'Tríceps E' },
+  '12': { x: 393, y: 213, label: 'Glúteo D' },
+  '11': { x: 357, y: 213, label: 'Glúteo E' },
+  '7':  { x: 393, y: 268, label: 'Post. Coxa D' },
+  '8':  { x: 357, y: 268, label: 'Post. Coxa E' },
+  'H':  { x: 395, y: 322, label: 'Joelho Post. D' },
+  'G':  { x: 355, y: 322, label: 'Joelho Post. E' },
+  '9':  { x: 393, y: 362, label: 'Panturrilha D' },
+  '10': { x: 357, y: 362, label: 'Panturrilha E' },
+  'J':  { x: 393, y: 400, label: 'Tendão Calc. D' },
+  'I':  { x: 357, y: 400, label: 'Tendão Calc. E' },
 }
 
 const POSICOES = ['GK', 'ZAG', 'LD', 'LE', 'VOL', 'MC', 'MEI', 'PD', 'PE', 'CA', 'ATA']
@@ -163,7 +165,163 @@ function PlayerRadarChart({ athleteData, compData, compLabel }) {
   )
 }
 
-// ─── FIGURA ANATÔMICA SVG ────────────────────────────────────────────────────
+// ─── FIGURA ANATÔMICA REALISTA ────────────────────────────────────────────────
+// Desenha um boneco humano com proporções anatômicas usando paths SVG curvos
+function BodyShape({ cx }) {
+  const s = `
+    M ${cx} 14 
+    m 0 0
+  `.trim() // apenas para localização de referência
+
+  return (
+    <g>
+      {/* ── CABEÇA ── */}
+      <circle cx={cx} cy={36} r={22} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.5"/>
+      {/* orelhas */}
+      <ellipse cx={cx - 23} cy={38} rx={5} ry={8} fill="#d0d9e8" stroke="#8fa3be" strokeWidth="1"/>
+      <ellipse cx={cx + 23} cy={38} rx={5} ry={8} fill="#d0d9e8" stroke="#8fa3be" strokeWidth="1"/>
+
+      {/* ── PESCOÇO ── */}
+      <path d={`M ${cx-8} 57 C ${cx-8} 57 ${cx-6} 72 ${cx-6} 74 L ${cx+6} 74 C ${cx+6} 72 ${cx+8} 57 ${cx+8} 57 Z`}
+        fill="#dde4ef" stroke="#8fa3be" strokeWidth="1"/>
+
+      {/* ── TRONCO (ombros → quadril com curvas naturais) ── */}
+      <path d={`
+        M ${cx-8} 73
+        C ${cx-28} 74 ${cx-48} 78 ${cx-54} 90
+        C ${cx-60} 104 ${cx-58} 120 ${cx-52} 132
+        L ${cx-42} 158
+        C ${cx-38} 172 ${cx-40} 190 ${cx-42} 208
+        L ${cx+42} 208
+        C ${cx+40} 190 ${cx+38} 172 ${cx+42} 158
+        L ${cx+52} 132
+        C ${cx+58} 120 ${cx+60} 104 ${cx+54} 90
+        C ${cx+48} 78 ${cx+28} 74 ${cx+8} 73
+        Z
+      `} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.5"/>
+
+      {/* ── BRAÇO ESQUERDO (braço direito do jogador, lado direito da tela) ── */}
+      {/* Parte superior */}
+      <path d={`
+        M ${cx+42} 84
+        C ${cx+52} 84 ${cx+68} 94 ${cx+76} 112
+        L ${cx+82} 148
+        C ${cx+84} 158 ${cx+80} 170 ${cx+74} 172
+        L ${cx+64} 172
+        C ${cx+68} 164 ${cx+70} 154 ${cx+68} 144
+        L ${cx+62} 108
+        C ${cx+58} 94 ${cx+46} 86 ${cx+36} 84
+        Z
+      `} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+      {/* Antebraço */}
+      <path d={`
+        M ${cx+74} 172 L ${cx+64} 172
+        C ${cx+66} 186 ${cx+70} 210 ${cx+72} 224
+        C ${cx+73} 232 ${cx+76} 237 ${cx+80} 237
+        C ${cx+84} 237 ${cx+87} 232 ${cx+88} 224
+        L ${cx+84} 186 Z
+      `} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+
+      {/* ── BRAÇO DIREITO (braço esquerdo do jogador, lado esquerdo da tela) ── */}
+      <path d={`
+        M ${cx-42} 84
+        C ${cx-52} 84 ${cx-68} 94 ${cx-76} 112
+        L ${cx-82} 148
+        C ${cx-84} 158 ${cx-80} 170 ${cx-74} 172
+        L ${cx-64} 172
+        C ${cx-68} 164 ${cx-70} 154 ${cx-68} 144
+        L ${cx-62} 108
+        C ${cx-58} 94 ${cx-46} 86 ${cx-36} 84
+        Z
+      `} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+      <path d={`
+        M ${cx-74} 172 L ${cx-64} 172
+        C ${cx-66} 186 ${cx-70} 210 ${cx-72} 224
+        C ${cx-73} 232 ${cx-76} 237 ${cx-80} 237
+        C ${cx-84} 237 ${cx-87} 232 ${cx-88} 224
+        L ${cx-84} 186 Z
+      `} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+
+      {/* ── QUADRIL / PELVE ── */}
+      <path d={`
+        M ${cx-42} 207
+        C ${cx-42} 218 ${cx-40} 230 ${cx-36} 236
+        L ${cx+36} 236
+        C ${cx+40} 230 ${cx+42} 218 ${cx+42} 207
+        Z
+      `} fill="#d4dce9" stroke="#8fa3be" strokeWidth="1.2"/>
+
+      {/* ── COXA DIREITA (lado esquerdo tela = perna esq. jogador) ── */}
+      <path d={`
+        M ${cx-36} 234
+        C ${cx-24} 232 ${cx-10} 232 ${cx-8} 234
+        C ${cx-6} 262 ${cx-6} 288 ${cx-10} 316
+        C ${cx-12} 322 ${cx-18} 326 ${cx-22} 326
+        C ${cx-26} 326 ${cx-32} 322 ${cx-34} 316
+        C ${cx-36} 288 ${cx-36} 262 ${cx-36} 234
+        Z
+      `} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+
+      {/* ── COXA ESQUERDA (lado direito tela = perna dir. jogador) ── */}
+      <path d={`
+        M ${cx+8} 234
+        C ${cx+10} 232 ${cx+24} 232 ${cx+36} 234
+        C ${cx+36} 262 ${cx+36} 288 ${cx+34} 316
+        C ${cx+32} 322 ${cx+26} 326 ${cx+22} 326
+        C ${cx+18} 326 ${cx+12} 322 ${cx+10} 316
+        C ${cx+6} 288 ${cx+6} 262 ${cx+8} 234
+        Z
+      `} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+
+      {/* ── JOELHOS ── */}
+      <ellipse cx={cx-22} cy={327} rx={14} ry={10} fill="#c8d5e5" stroke="#8fa3be" strokeWidth="1"/>
+      <ellipse cx={cx+22} cy={327} rx={14} ry={10} fill="#c8d5e5" stroke="#8fa3be" strokeWidth="1"/>
+
+      {/* ── PERNA DIREITA (esq. jogador) ── */}
+      <path d={`
+        M ${cx-36} 336
+        C ${cx-36} 352 ${cx-34} 372 ${cx-28} 386
+        C ${cx-26} 394 ${cx-22} 398 ${cx-18} 398
+        C ${cx-14} 398 ${cx-10} 394 ${cx-12} 386
+        C ${cx-10} 372 ${cx-10} 352 ${cx-10} 336
+        Z
+      `} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+
+      {/* ── PERNA ESQUERDA (dir. jogador) ── */}
+      <path d={`
+        M ${cx+10} 336
+        C ${cx+10} 352 ${cx+10} 372 ${cx+12} 386
+        C ${cx+10} 394 ${cx+14} 398 ${cx+18} 398
+        C ${cx+22} 398 ${cx+26} 394 ${cx+28} 386
+        C ${cx+34} 372 ${cx+36} 352 ${cx+36} 336
+        Z
+      `} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+
+      {/* ── TORNOZELOS / PÉS ── */}
+      <ellipse cx={cx-20} cy={402} rx={16} ry={8} fill="#c8d5e5" stroke="#8fa3be" strokeWidth="1"/>
+      <ellipse cx={cx+20} cy={402} rx={16} ry={8} fill="#c8d5e5" stroke="#8fa3be" strokeWidth="1"/>
+      <ellipse cx={cx-22} cy={410} rx={14} ry={6} fill="#bcc8dc" stroke="#8fa3be" strokeWidth="1"/>
+      <ellipse cx={cx+22} cy={410} rx={14} ry={6} fill="#bcc8dc" stroke="#8fa3be" strokeWidth="1"/>
+    </g>
+  )
+}
+
+function BodyBack({ cx }) {
+  return (
+    <g>
+      {/* Reutiliza a mesma forma com leve detalhe adicional nas costas */}
+      <BodyShape cx={cx} />
+      {/* Linha da coluna vertebral (costas) */}
+      <path d={`M ${cx} 74 L ${cx} 208`} stroke="#a0b3cc" strokeWidth="1" strokeDasharray="3,3"/>
+      {/* Escápulas */}
+      <path d={`M ${cx-14} 88 C ${cx-28} 92 ${cx-34} 106 ${cx-30} 118 C ${cx-26} 126 ${cx-16} 126 ${cx-10} 120`}
+        fill="none" stroke="#9ab0c8" strokeWidth="1.2"/>
+      <path d={`M ${cx+14} 88 C ${cx+28} 92 ${cx+34} 106 ${cx+30} 118 C ${cx+26} 126 ${cx+16} 126 ${cx+10} 120`}
+        fill="none" stroke="#9ab0c8" strokeWidth="1.2"/>
+    </g>
+  )
+}
+
 function AnatomyFigure({ activeRegions, hoveredRegion, onHover }) {
   const maxCount = Math.max(...Object.values(activeRegions), 1)
 
@@ -178,53 +336,16 @@ function AnatomyFigure({ activeRegions, hoveredRegion, onHover }) {
       <div className="flex justify-around text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 px-4">
         <span>FRENTE</span><span>COSTAS</span>
       </div>
-      <svg viewBox="0 0 500 440" className="w-full max-w-sm mx-auto block" style={{ maxHeight: 340 }}>
-        {/* ── FRENTE (centro x=125) ── */}
-        <circle cx="125" cy="40" r="28" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="118" y="68" width="14" height="17" rx="3" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="73" cy="100" rx="22" ry="11" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <ellipse cx="177" cy="100" rx="22" ry="11" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="97" y="85" width="56" height="90" rx="8" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="51" y="97" width="21" height="65" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="51" y="164" width="19" height="52" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="60" cy="220" rx="11" ry="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="178" y="97" width="21" height="65" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="180" y="164" width="19" height="52" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="190" cy="220" rx="11" ry="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="100" y="175" width="50" height="40" rx="6" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="100" y="215" width="23" height="82" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="127" y="215" width="23" height="82" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="111" cy="303" rx="13" ry="9" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="139" cy="303" rx="13" ry="9" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="100" y="312" width="23" height="68" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="127" y="312" width="23" height="68" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="111" cy="385" rx="15" ry="8" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="139" cy="385" rx="15" ry="8" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
+      <svg viewBox="0 0 500 430" className="w-full max-w-sm mx-auto block" style={{ maxHeight: 360 }}>
 
-        {/* Divider */}
-        <line x1="250" y1="0" x2="250" y2="440" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="5,3" />
+        {/* ── FRENTE (cx=125) ── */}
+        <BodyShape cx={125} />
 
-        {/* ── COSTAS (centro x=375) ── */}
-        <circle cx="375" cy="40" r="28" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="368" y="68" width="14" height="17" rx="3" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="323" cy="100" rx="22" ry="11" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <ellipse cx="427" cy="100" rx="22" ry="11" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="347" y="85" width="56" height="90" rx="8" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="301" y="97" width="21" height="65" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="301" y="164" width="19" height="52" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="310" cy="220" rx="11" ry="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="428" y="97" width="21" height="65" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="430" y="164" width="19" height="52" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="440" cy="220" rx="11" ry="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="350" y="175" width="50" height="40" rx="6" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="350" y="215" width="23" height="82" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="377" y="215" width="23" height="82" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="361" cy="303" rx="13" ry="9" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="389" cy="303" rx="13" ry="9" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="350" y="312" width="23" height="68" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="377" y="312" width="23" height="68" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="361" cy="385" rx="15" ry="8" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="389" cy="385" rx="15" ry="8" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
+        {/* Divisor */}
+        <line x1="250" y1="0" x2="250" y2="430" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="5,3" />
+
+        {/* ── COSTAS (cx=375) ── */}
+        <BodyBack cx={375} />
 
         {/* ── PONTOS DE DOR ── */}
         {Object.entries(ANATOMY_POINTS).map(([code, pos]) => {
@@ -234,10 +355,25 @@ function AnatomyFigure({ activeRegions, hoveredRegion, onHover }) {
           if (!color && !isHov) return null
           return (
             <g key={code} onMouseEnter={() => onHover(code)} onMouseLeave={() => onHover(null)} style={{ cursor: 'pointer' }}>
-              <circle cx={pos.x} cy={pos.y} r={isHov ? 11 : 7} fill={color || '#f59e0b'} fillOpacity={color ? 0.88 : 0.4} stroke="white" strokeWidth="1.5" />
-              {count > 1 && <text x={pos.x} y={pos.y + 4} textAnchor="middle" fontSize="8" fontWeight="bold" fill="white">{count}</text>}
+              {/* Halo de destaque */}
+              {(color || isHov) && (
+                <circle cx={pos.x} cy={pos.y} r={isHov ? 14 : 10}
+                  fill={color || '#fbbf24'} fillOpacity={0.2} />
+              )}
+              <circle cx={pos.x} cy={pos.y} r={isHov ? 9 : 6}
+                fill={color || '#fbbf24'} fillOpacity={color ? 0.92 : 0.5}
+                stroke="white" strokeWidth="1.5" />
+              {count > 1 && (
+                <text x={pos.x} y={pos.y + 4} textAnchor="middle" fontSize="7" fontWeight="bold" fill="white">{count}</text>
+              )}
               {isHov && (
-                <text x={pos.x} y={pos.y - 14} textAnchor="middle" fontSize="9" fontWeight="bold" fill="#1e293b">{pos.label}</text>
+                <g>
+                  <rect x={pos.x - 36} y={pos.y - 26} width="72" height="16" rx="4"
+                    fill="rgba(15,23,42,0.85)" />
+                  <text x={pos.x} y={pos.y - 15} textAnchor="middle" fontSize="9" fontWeight="bold" fill="white">
+                    {pos.label}
+                  </text>
+                </g>
               )}
             </g>
           )
