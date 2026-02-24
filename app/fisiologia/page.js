@@ -12,14 +12,16 @@ const EMPTY_META = { sessionType: 'treino', sessionPeriod: 'tarde', opponent: ''
 export default function Fisiologia() {
   const router = useRouter()
   const {
-    gpsData, isLoadingGps, uploadStatus, uploadQueue, uploadGpsFile, uploadMultipleGpsFiles, deleteGpsSession,
+    gpsData, isLoadingGps, uploadStatus, uploadQueue, uploadGpsFile, uploadMultipleGpsFiles, deleteGpsSession, bulkDeleteGpsSessions,
     bemEstarData, isLoadingBemEstar, fetchBemEstar,
   } = useData()
   const [dragOver, setDragOver] = useState(false)
   const [showCsvManager, setShowCsvManager] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [selectedIds, setSelectedIds] = useState(new Set())
   // pendingFiles: array de { file, name, meta: { sessionType, sessionPeriod, opponent, result } }
   const [pendingFiles, setPendingFiles] = useState([])
   const [editingIdx, setEditingIdx] = useState(null)
@@ -423,13 +425,57 @@ export default function Fisiologia() {
         {showCsvManager && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
-              <div className="flex justify-between items-center mb-4">
+
+              {/* Cabeçalho */}
+              <div className="flex justify-between items-center mb-3">
                 <div>
                   <h3 className="text-base font-black uppercase tracking-tighter text-black">Sessões GPS Armazenadas</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{gpsData.length} sessão(ões) no banco · Exclua uma sessão para fazer upload de outra no lugar</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {gpsData.length} sessão(ões) no banco
+                    {selectedIds.size > 0 && <span className="ml-2 text-amber-600 font-black">· {selectedIds.size} selecionada(s)</span>}
+                  </p>
                 </div>
-                <button onClick={() => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null) }} className="text-slate-400 hover:text-slate-700 font-black text-xl leading-none">✕</button>
+                <button onClick={() => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null); setSelectedIds(new Set()) }} className="text-slate-400 hover:text-slate-700 font-black text-xl leading-none">✕</button>
               </div>
+
+              {/* Barra de ações em lote */}
+              {gpsData.length > 0 && (
+                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-100">
+                  <button
+                    onClick={() => setSelectedIds(selectedIds.size === gpsData.length ? new Set() : new Set(gpsData.map(s => s.id)))}
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg border border-slate-200 hover:border-slate-300 transition-all"
+                  >
+                    {selectedIds.size === gpsData.length ? '☐ Desmarcar todos' : '☑ Selecionar todos'}
+                  </button>
+
+                  {selectedIds.size > 0 && (
+                    <button
+                      disabled={isBulkDeleting}
+                      onClick={async () => {
+                        if (!window.confirm(`Excluir ${selectedIds.size} sessão(ões) selecionada(s)? Esta ação não pode ser desfeita.`)) return
+                        setIsBulkDeleting(true)
+                        setDeleteError(null)
+                        const result = await bulkDeleteGpsSessions(Array.from(selectedIds))
+                        setIsBulkDeleting(false)
+                        if (!result?.success) {
+                          setDeleteError(result?.error || 'Erro ao excluir sessões.')
+                        } else {
+                          setSelectedIds(new Set())
+                        }
+                      }}
+                      className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isBulkDeleting ? (
+                        <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                        </svg>
+                      ) : '🗑'}
+                      {isBulkDeleting ? 'Excluindo...' : `Excluir ${selectedIds.size} selecionada(s)`}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Erro global */}
               {deleteError && (
@@ -439,6 +485,7 @@ export default function Fisiologia() {
                 </div>
               )}
 
+              {/* Lista de sessões */}
               <div className="overflow-y-auto flex-1 flex flex-col gap-2">
                 {gpsData.length === 0 ? (
                   <div className="text-center py-12 text-slate-400 text-sm">Nenhuma sessão armazenada.</div>
@@ -450,11 +497,31 @@ export default function Fisiologia() {
                     const athletes = [...new Set((session.rows || []).filter(r => !r.isOutlier && r.periodNumber === 0).map(r => r.playerName))].length
                     const isDeleting = deletingId === session.id
                     const isConfirming = confirmDeleteId === session.id
+                    const isSelected = selectedIds.has(session.id)
 
                     return (
                       <div key={session.id}
-                        className={`flex items-center gap-3 border rounded-xl px-4 py-3 transition-all ${isDeleting ? 'opacity-50 bg-red-50 border-red-200' : isConfirming ? 'border-red-300 bg-red-50' : 'border-slate-200 hover:bg-slate-50'}`}>
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg shrink-0 ${isJogo ? 'bg-green-100' : 'bg-blue-100'}`}>
+                        className={`flex items-center gap-3 border rounded-xl px-3 py-3 transition-all cursor-pointer select-none
+                          ${isDeleting ? 'opacity-40 bg-red-50 border-red-200' :
+                            isSelected ? 'border-amber-400 bg-amber-50' :
+                            isConfirming ? 'border-red-300 bg-red-50' :
+                            'border-slate-200 hover:bg-slate-50'}`}
+                        onClick={() => {
+                          if (isDeleting || isBulkDeleting) return
+                          setSelectedIds(prev => {
+                            const next = new Set(prev)
+                            next.has(session.id) ? next.delete(session.id) : next.add(session.id)
+                            return next
+                          })
+                          setConfirmDeleteId(null)
+                        }}
+                      >
+                        {/* Checkbox */}
+                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${isSelected ? 'bg-amber-500 border-amber-500' : 'border-slate-300'}`}>
+                          {isSelected && <span className="text-white text-xs font-black leading-none">✓</span>}
+                        </div>
+
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0 ${isJogo ? 'bg-green-100' : 'bg-blue-100'}`}>
                           {isDeleting ? (
                             <svg className="w-4 h-4 animate-spin text-red-500" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -474,40 +541,32 @@ export default function Fisiologia() {
                           </div>
                         </div>
 
-                        <div className="shrink-0 flex items-center gap-2">
+                        {/* Botão excluir individual */}
+                        <div className="shrink-0" onClick={e => e.stopPropagation()}>
                           {isConfirming ? (
-                            <>
-                              <span className="text-[10px] text-red-600 font-black hidden sm:block">Confirmar exclusão?</span>
+                            <div className="flex items-center gap-1">
                               <button
                                 disabled={isDeleting}
-                              onClick={async () => {
+                                onClick={async () => {
                                   setDeletingId(session.id)
                                   setConfirmDeleteId(null)
                                   setDeleteError(null)
                                   const result = await deleteGpsSession(session.id)
                                   setDeletingId(null)
-                                  if (!result?.success) {
-                                    setDeleteError(result?.error || `Erro ao excluir "${session.name}"`)
-                                  }
+                                  setSelectedIds(prev => { const n = new Set(prev); n.delete(session.id); return n })
+                                  if (!result?.success) setDeleteError(result?.error || `Erro ao excluir "${session.name}"`)
                                 }}
-                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
-                              >
-                                ✓ Sim, excluir
-                              </button>
-                              <button
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
-                              >
-                                Cancelar
-                              </button>
-                            </>
+                                className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-[10px] font-black transition-all disabled:opacity-50"
+                              >✓</button>
+                              <button onClick={() => setConfirmDeleteId(null)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-lg text-[10px] font-black transition-all">✕</button>
+                            </div>
                           ) : (
                             <button
-                              disabled={isDeleting || !!deletingId}
+                              disabled={isDeleting || !!deletingId || isBulkDeleting}
                               onClick={() => setConfirmDeleteId(session.id)}
-                              className="bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
-                              🗑 Excluir
+                              🗑
                             </button>
                           )}
                         </div>
@@ -517,6 +576,7 @@ export default function Fisiologia() {
                 )}
               </div>
 
+              {/* Footer */}
               <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-100">
                 <label className="cursor-pointer bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
                   + Upload novo CSV
@@ -525,10 +585,14 @@ export default function Fisiologia() {
                     accept=".csv"
                     multiple
                     className="hidden"
-                    onChange={e => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null); handleFilesSelect(e.target.files); e.target.value = '' }}
+                    onChange={e => {
+                      setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null); setSelectedIds(new Set())
+                      handleFilesSelect(e.target.files); e.target.value = ''
+                    }}
                   />
                 </label>
-                <button onClick={() => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null) }} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                <button onClick={() => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null); setSelectedIds(new Set()) }}
+                  className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
                   Fechar
                 </button>
               </div>
