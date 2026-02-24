@@ -87,7 +87,7 @@ export function DataProvider({ children }) {
 
   const [vmaxBaseline, setVmaxBaseline] = useState({})
 
-  const SHEETS_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS-cmQfBRf3_LpTHaqJmmolqENeue_-egKq6xpPvvW3bFWxqfZF9HbidZdWIqrKWT12-6Zf7BqQ4GSV/pub?gid=0&single=true&output=csv'
+  const SHEETS_URL = '/api/bem-estar'
 
   // ── Carregar sessões GPS ──────────────────────────────────────────────────
   const fetchGpsSessions = useCallback(async () => {
