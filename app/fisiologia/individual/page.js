@@ -163,8 +163,8 @@ function PlayerRadarChart({ athleteData, compData, compLabel }) {
   )
 }
 
-// ─── FIGURA ANATÔMICA SVG ────────────────────────────────────────────────────
-function AnatomyFigure({ activeRegions, hoveredRegion, onHover }) {
+// ─── FIGURA ANATÔMICA REALISTA ────────────────────────────────────────────────
+export function AnatomyFigure({ activeRegions, hoveredRegion, onHover }) {
   const maxCount = Math.max(...Object.values(activeRegions), 1)
 
   function dotColor(code) {
@@ -173,76 +173,248 @@ function AnatomyFigure({ activeRegions, hoveredRegion, onHover }) {
     return i > 0.66 ? '#dc2626' : i > 0.33 ? '#f97316' : '#fbbf24'
   }
 
+  // Pontos calibrados para o SVG realista abaixo (viewBox 0 0 560 480)
+  // Frente: centro x≈140 | Costas: centro x≈420
+  const POINTS = {
+    // ── FRENTE ──
+    'P':  { x: 140, y: 28,  label: 'Cervical' },
+    'L':  { x: 183, y: 82,  label: 'Deltoide D' },
+    'M':  { x: 97,  y: 82,  label: 'Deltoide E' },
+    '15': { x: 162, y: 118, label: 'Peitoral D' },
+    '16': { x: 118, y: 118, label: 'Peitoral E' },
+    '19': { x: 196, y: 128, label: 'Bíceps D' },
+    '20': { x: 84,  y: 128, label: 'Bíceps E' },
+    'A':  { x: 140, y: 158, label: 'Abdome' },
+    'R':  { x: 202, y: 162, label: 'Cotovelo D' },
+    'Q':  { x: 78,  y: 162, label: 'Cotovelo E' },
+    'N':  { x: 208, y: 198, label: 'Punho D' },
+    'O':  { x: 72,  y: 198, label: 'Punho E' },
+    '13': { x: 158, y: 200, label: 'Flex. Quadril D' },
+    '14': { x: 122, y: 200, label: 'Flex. Quadril E' },
+    '3':  { x: 152, y: 240, label: 'Adutor D' },
+    '4':  { x: 128, y: 240, label: 'Adutor E' },
+    '1':  { x: 162, y: 258, label: 'Ant. Coxa D' },
+    '2':  { x: 118, y: 258, label: 'Ant. Coxa E' },
+    'B':  { x: 162, y: 318, label: 'Joelho Ant. D' },
+    'C':  { x: 118, y: 318, label: 'Joelho Ant. E' },
+    '5':  { x: 162, y: 368, label: 'Tibial Ant. D' },
+    '6':  { x: 118, y: 368, label: 'Tibial Ant. E' },
+    'D':  { x: 162, y: 430, label: 'Tornozelo D' },
+    'E':  { x: 118, y: 430, label: 'Tornozelo E' },
+
+    // ── COSTAS ──
+    '17': { x: 403, y: 115, label: 'Dorso E' },
+    '18': { x: 437, y: 115, label: 'Dorso D' },
+    'F':  { x: 420, y: 162, label: 'Lombar' },
+    '21': { x: 387, y: 128, label: 'Tríceps E' },
+    '22': { x: 453, y: 128, label: 'Tríceps D' },
+    '11': { x: 406, y: 208, label: 'Glúteo E' },
+    '12': { x: 434, y: 208, label: 'Glúteo D' },
+    '8':  { x: 406, y: 262, label: 'Post. Coxa E' },
+    '7':  { x: 434, y: 262, label: 'Post. Coxa D' },
+    'G':  { x: 406, y: 320, label: 'Joelho Post. E' },
+    'H':  { x: 434, y: 320, label: 'Joelho Post. D' },
+    '10': { x: 406, y: 368, label: 'Panturrilha E' },
+    '9':  { x: 434, y: 368, label: 'Panturrilha D' },
+    'I':  { x: 406, y: 428, label: 'Tendão Calc. E' },
+    'J':  { x: 434, y: 428, label: 'Tendão Calc. D' },
+  }
+
   return (
     <div>
       <div className="flex justify-around text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 px-4">
         <span>FRENTE</span><span>COSTAS</span>
       </div>
-      <svg viewBox="0 0 500 440" className="w-full max-w-sm mx-auto block" style={{ maxHeight: 340 }}>
-        {/* ── FRENTE (centro x=125) ── */}
-        <circle cx="125" cy="40" r="28" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="118" y="68" width="14" height="17" rx="3" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="73" cy="100" rx="22" ry="11" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <ellipse cx="177" cy="100" rx="22" ry="11" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="97" y="85" width="56" height="90" rx="8" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="51" y="97" width="21" height="65" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="51" y="164" width="19" height="52" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="60" cy="220" rx="11" ry="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="178" y="97" width="21" height="65" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="180" y="164" width="19" height="52" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="190" cy="220" rx="11" ry="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="100" y="175" width="50" height="40" rx="6" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="100" y="215" width="23" height="82" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="127" y="215" width="23" height="82" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="111" cy="303" rx="13" ry="9" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="139" cy="303" rx="13" ry="9" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="100" y="312" width="23" height="68" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="127" y="312" width="23" height="68" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="111" cy="385" rx="15" ry="8" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="139" cy="385" rx="15" ry="8" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
 
-        {/* Divider */}
-        <line x1="250" y1="0" x2="250" y2="440" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="5,3" />
+      <svg viewBox="0 0 560 460" className="w-full max-w-md mx-auto block" style={{ maxHeight: 400 }}>
 
-        {/* ── COSTAS (centro x=375) ── */}
-        <circle cx="375" cy="40" r="28" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="368" y="68" width="14" height="17" rx="3" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="323" cy="100" rx="22" ry="11" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <ellipse cx="427" cy="100" rx="22" ry="11" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="347" y="85" width="56" height="90" rx="8" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="301" y="97" width="21" height="65" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="301" y="164" width="19" height="52" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="310" cy="220" rx="11" ry="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="428" y="97" width="21" height="65" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="430" y="164" width="19" height="52" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="440" cy="220" rx="11" ry="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="350" y="175" width="50" height="40" rx="6" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
-        <rect x="350" y="215" width="23" height="82" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="377" y="215" width="23" height="82" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="361" cy="303" rx="13" ry="9" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="389" cy="303" rx="13" ry="9" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="350" y="312" width="23" height="68" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <rect x="377" y="312" width="23" height="68" rx="7" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="361" cy="385" rx="15" ry="8" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
-        <ellipse cx="389" cy="385" rx="15" ry="8" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
+        {/* ═══════════════════════════════════════════════
+            FRENTE — centro x=140
+        ═══════════════════════════════════════════════ */}
 
-        {/* ── PONTOS DE DOR ── */}
-        {Object.entries(ANATOMY_POINTS).map(([code, pos]) => {
+        {/* Cabeça */}
+        <ellipse cx="140" cy="26" rx="22" ry="24" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1.2"/>
+        {/* Pescoço */}
+        <rect x="133" y="48" width="14" height="16" rx="4" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        {/* Ombros (trapézio) */}
+        <path d="M90 70 Q97 62 140 65 Q183 62 190 70 L186 88 Q183 80 140 82 Q97 80 94 88 Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+        {/* Tronco */}
+        <path d="M96 82 Q94 120 97 175 Q100 195 108 200 L172 200 Q180 195 183 175 Q186 120 184 82 Q162 85 140 85 Q118 85 96 82Z" fill="#c8a070" stroke="#a87850" strokeWidth="1.2"/>
+        {/* Músculo peitoral D */}
+        <ellipse cx="162" cy="115" rx="20" ry="15" fill="#d4a068" stroke="#a87850" strokeWidth="0.8" opacity="0.7"/>
+        {/* Músculo peitoral E */}
+        <ellipse cx="118" cy="115" rx="20" ry="15" fill="#d4a068" stroke="#a87850" strokeWidth="0.8" opacity="0.7"/>
+        {/* Abdome (linhas) */}
+        <line x1="140" y1="102" x2="140" y2="195" stroke="#a87850" strokeWidth="0.8" opacity="0.4"/>
+        <line x1="120" y1="118" x2="160" y2="118" stroke="#a87850" strokeWidth="0.8" opacity="0.3"/>
+        <line x1="118" y1="135" x2="162" y2="135" stroke="#a87850" strokeWidth="0.8" opacity="0.3"/>
+        <line x1="118" y1="152" x2="162" y2="152" stroke="#a87850" strokeWidth="0.8" opacity="0.3"/>
+        <line x1="118" y1="168" x2="162" y2="168" stroke="#a87850" strokeWidth="0.8" opacity="0.3"/>
+
+        {/* Braço D — superior */}
+        <path d="M184 82 Q202 88 208 120 Q210 138 206 155 L198 155 Q198 138 196 120 Q190 95 180 90Z" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        {/* Braço D — inferior (antebraço) */}
+        <path d="M198 155 Q208 160 212 185 Q214 195 212 205 L204 205 Q206 195 205 185 Q203 165 196 160Z" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        {/* Mão D */}
+        <ellipse cx="208" cy="212" rx="10" ry="8" fill="#e8c9a0" stroke="#c8a070" strokeWidth="0.8"/>
+
+        {/* Braço E — superior */}
+        <path d="M96 82 Q78 88 72 120 Q70 138 74 155 L82 155 Q82 138 84 120 Q90 95 100 90Z" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        {/* Braço E — inferior (antebraço) */}
+        <path d="M82 155 Q72 160 68 185 Q66 195 68 205 L76 205 Q74 195 75 185 Q77 165 84 160Z" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        {/* Mão E */}
+        <ellipse cx="72" cy="212" rx="10" ry="8" fill="#e8c9a0" stroke="#c8a070" strokeWidth="0.8"/>
+
+        {/* Quadril */}
+        <path d="M108 200 Q96 210 96 225 L108 225 Q110 215 140 215 Q170 215 172 225 L184 225 Q184 210 172 200Z" fill="#c8a070" stroke="#a87850" strokeWidth="1"/>
+
+        {/* Coxa D */}
+        <path d="M140 215 Q168 218 172 225 Q176 270 172 310 L156 310 Q162 270 158 228Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+        {/* Músculo quadríceps D */}
+        <ellipse cx="162" cy="262" rx="14" ry="30" fill="#c8a070" stroke="#a87850" strokeWidth="0.8" opacity="0.6"/>
+
+        {/* Coxa E */}
+        <path d="M140 215 Q112 218 108 225 Q104 270 108 310 L124 310 Q118 270 122 228Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+        {/* Músculo quadríceps E */}
+        <ellipse cx="118" cy="262" rx="14" ry="30" fill="#c8a070" stroke="#a87850" strokeWidth="0.8" opacity="0.6"/>
+
+        {/* Joelho D */}
+        <ellipse cx="162" cy="316" rx="13" ry="10" fill="#c0956a" stroke="#a87850" strokeWidth="1"/>
+        {/* Joelho E */}
+        <ellipse cx="118" cy="316" rx="13" ry="10" fill="#c0956a" stroke="#a87850" strokeWidth="1"/>
+
+        {/* Perna D (tibial) */}
+        <path d="M156 326 Q164 330 166 370 Q166 390 162 408 L154 408 Q158 390 158 370 Q157 340 152 330Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+        {/* Perna E (tibial) */}
+        <path d="M124 326 Q116 330 114 370 Q114 390 118 408 L126 408 Q122 390 122 370 Q123 340 128 330Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+
+        {/* Tornozelo + pé D */}
+        <ellipse cx="162" cy="414" rx="12" ry="7" fill="#c0956a" stroke="#a87850" strokeWidth="0.8"/>
+        <ellipse cx="164" cy="432" rx="14" ry="7" fill="#c8a070" stroke="#a87850" strokeWidth="0.8"/>
+        {/* Tornozelo + pé E */}
+        <ellipse cx="118" cy="414" rx="12" ry="7" fill="#c0956a" stroke="#a87850" strokeWidth="0.8"/>
+        <ellipse cx="116" cy="432" rx="14" ry="7" fill="#c8a070" stroke="#a87850" strokeWidth="0.8"/>
+
+
+        {/* ═══════════════════════════════════════════════
+            DIVISOR
+        ═══════════════════════════════════════════════ */}
+        <line x1="280" y1="0" x2="280" y2="460" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="6,3"/>
+
+
+        {/* ═══════════════════════════════════════════════
+            COSTAS — centro x=420
+        ═══════════════════════════════════════════════ */}
+
+        {/* Cabeça */}
+        <ellipse cx="420" cy="26" rx="22" ry="24" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1.2"/>
+        {/* Pescoço */}
+        <rect x="413" y="48" width="14" height="16" rx="4" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        {/* Ombros */}
+        <path d="M370 70 Q377 62 420 65 Q463 62 470 70 L466 88 Q463 80 420 82 Q377 80 374 88 Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+        {/* Tronco costas */}
+        <path d="M376 82 Q374 120 377 175 Q380 195 388 200 L452 200 Q460 195 463 175 Q466 120 464 82 Q442 85 420 85 Q398 85 376 82Z" fill="#c8a070" stroke="#a87850" strokeWidth="1.2"/>
+        {/* Músculo dorsal E */}
+        <ellipse cx="403" cy="120" rx="18" ry="28" fill="#b87848" stroke="#a87850" strokeWidth="0.8" opacity="0.6"/>
+        {/* Músculo dorsal D */}
+        <ellipse cx="437" cy="120" rx="18" ry="28" fill="#b87848" stroke="#a87850" strokeWidth="0.8" opacity="0.6"/>
+        {/* Espinha */}
+        <line x1="420" y1="85" x2="420" y2="200" stroke="#a87850" strokeWidth="1.5" opacity="0.5"/>
+        {/* Lombar */}
+        <ellipse cx="420" cy="168" rx="22" ry="14" fill="#a86840" stroke="#906030" strokeWidth="0.8" opacity="0.5"/>
+
+        {/* Braço D costas — superior */}
+        <path d="M464 82 Q480 88 486 120 Q488 138 484 155 L476 155 Q476 138 475 120 Q470 95 462 90Z" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        {/* Braço D costas — inferior */}
+        <path d="M476 155 Q486 160 490 185 Q492 195 490 205 L482 205 Q484 195 483 185 Q481 165 475 160Z" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        <ellipse cx="488" cy="212" rx="10" ry="8" fill="#e8c9a0" stroke="#c8a070" strokeWidth="0.8"/>
+
+        {/* Braço E costas — superior */}
+        <path d="M376 82 Q360 88 354 120 Q352 138 356 155 L364 155 Q364 138 366 120 Q370 95 380 90Z" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        {/* Braço E costas — inferior */}
+        <path d="M364 155 Q354 160 350 185 Q348 195 350 205 L358 205 Q356 195 357 185 Q359 165 366 160Z" fill="#e8c9a0" stroke="#c8a070" strokeWidth="1"/>
+        <ellipse cx="352" cy="212" rx="10" ry="8" fill="#e8c9a0" stroke="#c8a070" strokeWidth="0.8"/>
+
+        {/* Glúteo */}
+        <path d="M388 200 Q376 210 376 228 L396 228 Q398 215 420 215 Q442 215 444 228 L464 228 Q464 210 452 200Z" fill="#c8a070" stroke="#a87850" strokeWidth="1"/>
+        <ellipse cx="406" cy="218" rx="18" ry="14" fill="#b87848" stroke="#a87850" strokeWidth="0.8" opacity="0.6"/>
+        <ellipse cx="434" cy="218" rx="18" ry="14" fill="#b87848" stroke="#a87850" strokeWidth="0.8" opacity="0.6"/>
+
+        {/* Posterior coxa E */}
+        <path d="M420 215 Q448 218 452 225 Q456 270 452 310 L436 310 Q442 270 438 228Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+        <ellipse cx="434" cy="265" rx="14" ry="32" fill="#c8a070" stroke="#a87850" strokeWidth="0.8" opacity="0.6"/>
+
+        {/* Posterior coxa D */}
+        <path d="M420 215 Q392 218 388 225 Q384 270 388 310 L404 310 Q398 270 402 228Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+        <ellipse cx="406" cy="265" rx="14" ry="32" fill="#c8a070" stroke="#a87850" strokeWidth="0.8" opacity="0.6"/>
+
+        {/* Joelho post. E */}
+        <ellipse cx="434" cy="316" rx="13" ry="10" fill="#c0956a" stroke="#a87850" strokeWidth="1"/>
+        {/* Joelho post. D */}
+        <ellipse cx="406" cy="316" rx="13" ry="10" fill="#c0956a" stroke="#a87850" strokeWidth="1"/>
+
+        {/* Panturrilha E */}
+        <path d="M436 326 Q444 332 444 370 Q444 390 440 408 L432 408 Q436 390 436 370 Q435 342 430 330Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+        <ellipse cx="434" cy="368" rx="10" ry="28" fill="#c8a070" stroke="#a87850" strokeWidth="0.8" opacity="0.7"/>
+        {/* Panturrilha D */}
+        <path d="M404 326 Q396 332 396 370 Q396 390 400 408 L408 408 Q404 390 404 370 Q405 342 410 330Z" fill="#d4a880" stroke="#c8a070" strokeWidth="1"/>
+        <ellipse cx="406" cy="368" rx="10" ry="28" fill="#c8a070" stroke="#a87850" strokeWidth="0.8" opacity="0.7"/>
+
+        {/* Tendão Aquiles + pé E */}
+        <rect x="428" y="408" width="10" height="18" rx="3" fill="#b87848" stroke="#906030" strokeWidth="0.8"/>
+        <ellipse cx="436" cy="432" rx="14" ry="7" fill="#c8a070" stroke="#a87850" strokeWidth="0.8"/>
+        {/* Tendão Aquiles + pé D */}
+        <rect x="402" y="408" width="10" height="18" rx="3" fill="#b87848" stroke="#906030" strokeWidth="0.8"/>
+        <ellipse cx="406" cy="432" rx="14" ry="7" fill="#c8a070" stroke="#a87850" strokeWidth="0.8"/>
+
+
+        {/* ═══════════════════════════════════════════════
+            PONTOS DE DOR
+        ═══════════════════════════════════════════════ */}
+        {Object.entries(POINTS).map(([code, pos]) => {
           const color = dotColor(code)
           const count = activeRegions[code] || 0
           const isHov = hoveredRegion === code
           if (!color && !isHov) return null
           return (
-            <g key={code} onMouseEnter={() => onHover(code)} onMouseLeave={() => onHover(null)} style={{ cursor: 'pointer' }}>
-              <circle cx={pos.x} cy={pos.y} r={isHov ? 11 : 7} fill={color || '#f59e0b'} fillOpacity={color ? 0.88 : 0.4} stroke="white" strokeWidth="1.5" />
-              {count > 1 && <text x={pos.x} y={pos.y + 4} textAnchor="middle" fontSize="8" fontWeight="bold" fill="white">{count}</text>}
-              {isHov && (
-                <text x={pos.x} y={pos.y - 14} textAnchor="middle" fontSize="9" fontWeight="bold" fill="#1e293b">{pos.label}</text>
+            <g key={code} onMouseEnter={() => onHover(code)} onMouseLeave={() => onHover(null)}
+              style={{ cursor: 'pointer' }}>
+              {/* Halo externo */}
+              {(color || isHov) && (
+                <circle cx={pos.x} cy={pos.y} r={isHov ? 14 : 10}
+                  fill={color || '#f59e0b'} fillOpacity={0.25}
+                  stroke={color || '#f59e0b'} strokeWidth="1" strokeOpacity={0.5}/>
               )}
+              {/* Ponto central */}
+              <circle cx={pos.x} cy={pos.y} r={isHov ? 8 : 6}
+                fill={color || '#f59e0b'} fillOpacity={color ? 0.92 : 0.5}
+                stroke="white" strokeWidth="1.5"/>
+              {/* Contador */}
+              {count > 1 && (
+                <text x={pos.x} y={pos.y + 3} textAnchor="middle"
+                  fontSize="7" fontWeight="bold" fill="white">{count}</text>
+              )}
+              {/* Tooltip hover */}
+              {isHov && (() => {
+                const isRight = pos.x > 280
+                const tx = isRight ? pos.x + 16 : pos.x - 16
+                const anchor = isRight ? 'start' : 'end'
+                const lw = pos.label.length * 5.5 + 8
+                const lx = isRight ? tx - 4 : tx - lw + 4
+                return (
+                  <g>
+                    <rect x={lx} y={pos.y - 14} width={lw} height={16} rx="3"
+                      fill="white" stroke="#cbd5e1" strokeWidth="0.8" opacity="0.95"/>
+                    <text x={tx} y={pos.y - 3} textAnchor={anchor}
+                      fontSize="8.5" fontWeight="bold" fill="#1e293b">{pos.label}</text>
+                  </g>
+                )
+              })()}
             </g>
           )
         })}
       </svg>
+
       <div className="flex items-center justify-center gap-4 mt-2">
         {[['bg-amber-400', '1× relatado'], ['bg-orange-500', 'Frequente'], ['bg-red-600', 'Recorrente']].map(([bg, lbl]) => (
           <div key={lbl} className="flex items-center gap-1">
@@ -307,13 +479,19 @@ function IndividualContent() {
   // ─── DOR ─────────────────────────────────────────────────────────────────────
   const painCodeMap = useMemo(() => {
     const map = {}
+    // Usamos os novos pontos calibrados para mapeamento
+    const VALID_CODES = {
+      'P':1,'L':1,'M':1,'15':1,'16':1,'19':1,'20':1,'A':1,'R':1,'Q':1,'N':1,'O':1,
+      '13':1,'14':1,'3':1,'4':1,'1':1,'2':1,'B':1,'C':1,'5':1,'6':1,'D':1,'E':1,
+      '17':1,'18':1,'F':1,'21':1,'22':1,'11':1,'12':1,'8':1,'7':1,'G':1,'H':1,'10':1,'9':1,'I':1,'J':1
+    }
     for (const r of wellinessHistory) {
       if (!r.temDor || !r.dorLocalizada) continue
       const parts = r.dorLocalizada.split(',').map(p => p.trim())
       for (const part of parts) {
         if (!part || part === '0 - Sem dor') continue
         const code = part.split(' - ')[0].trim()
-        if (ANATOMY_POINTS[code]) {
+        if (VALID_CODES[code]) {
           map[code] = (map[code] || 0) + 1
         } else {
           for (const [k, v] of Object.entries(DOR_LABELS)) {
@@ -443,58 +621,38 @@ function IndividualContent() {
         </div>
       </header>
 
-      {/* MODAL POSIÇÕES */}
-      {showPositionConfig && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-black uppercase tracking-tighter">Configurar Posições</h3>
-              <button onClick={() => setShowPositionConfig(false)} className="text-slate-400 hover:text-slate-700 font-black text-lg">✕</button>
-            </div>
-            <p className="text-xs text-slate-500 mb-4">Atribua posições para comparação no radar por função tática.</p>
-            <div className="flex flex-col gap-2">
-              {allAthletes.map(a => (
-                <div key={a} className="flex items-center gap-3">
-                  <span className="text-xs font-bold flex-1 truncate">{a}</span>
-                  <select value={playerPositions[a] || ''} onChange={e => setPlayerPositions(prev => ({ ...prev, [a]: e.target.value }))}
-                    className="border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold bg-white focus:border-amber-400 focus:outline-none">
-                    <option value="">— Posição —</option>
-                    {POSICOES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end mt-4">
-              <button onClick={() => setShowPositionConfig(false)} className="px-5 py-2 bg-amber-500 text-black text-xs font-black uppercase tracking-widest rounded-xl hover:bg-amber-400">Salvar</button>
-            </div>
+      {/* RESUMO TOPO */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Último Bem-Estar</p>
+          <div className="flex items-end gap-2">
+            <span className={`text-3xl font-black leading-none ${scoreBg(lastWellness?.wellnessScore).split(' ')[1]}`}>{lastWellness?.wellnessScore?.toFixed(1) || '—'}</span>
+            <span className="text-xs font-bold text-slate-400 mb-1">/ 5.0</span>
+          </div>
+          <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">{lastWellness?.date || 'Sem dados'}</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Média Wellness</p>
+          <span className="text-3xl font-black leading-none text-slate-700">{avgWellness?.toFixed(1) || '—'}</span>
+          <div className="mt-2 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-amber-500" style={{ width: `${(avgWellness / 5) * 100}%` }} />
           </div>
         </div>
-      )}
-
-      {/* CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="col-span-2 bg-slate-50 border-2 border-slate-200 rounded-xl p-4">
-          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Atleta</p>
-          <div className="flex items-center gap-3 flex-wrap">
-            <p className="text-xl font-black">{athlete}</p>
-            {athletePosition && <span className="bg-amber-100 text-amber-700 text-xs font-black px-2 py-0.5 rounded-lg uppercase">{athletePosition}</span>}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Última Vmax</p>
+          <div className="flex items-end gap-2">
+            <span className="text-3xl font-black leading-none text-slate-700">{latestGps?.maxVelocity?.toFixed(1) || '—'}</span>
+            <span className="text-xs font-bold text-slate-400 mb-1">km/h</span>
           </div>
-          <div className="mt-3 flex gap-3 flex-wrap">
-            {vmaxMax && <div className="bg-amber-50 border border-amber-200 rounded-lg px-2 py-1"><p className="text-[9px] font-black text-amber-700 uppercase">Vmax baseline</p><p className="text-sm font-black text-amber-800">{vmaxMax.toFixed(1)} km/h</p></div>}
-            {vmaxPct && <div className={`border rounded-lg px-2 py-1 ${vmaxPct >= 90 ? 'bg-green-50 border-green-200' : vmaxPct >= 80 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}><p className="text-[9px] font-black text-slate-600 uppercase">Últ. % Vmax</p><p className={`text-sm font-black ${vmaxPct >= 90 ? 'text-green-700' : vmaxPct >= 80 ? 'text-amber-700' : 'text-slate-600'}`}>{vmaxPct}%</p></div>}
-            {lastWellness && <div className={`border rounded-lg px-2 py-1 ${scoreBg(lastWellness.wellnessScore)}`}><p className="text-[9px] font-black uppercase">Bem-estar último</p><p className="text-sm font-black">{lastWellness.wellnessScore?.toFixed(1) ?? '—'}</p></div>}
-            <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><p className="text-[9px] font-black text-slate-500 uppercase">Registros</p><p className="text-sm font-black">{wellinessHistory.length} bem-estar · {gpsHistory.length} GPS</p></div>
+          {vmaxPct && <p className={`text-[10px] font-black mt-1 ${vmaxPct >= 90 ? 'text-green-600' : 'text-amber-600'}`}>{vmaxPct}% da Vmax Base</p>}
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Dist. Média (GPS)</p>
+          <div className="flex items-end gap-2">
+            <span className="text-3xl font-black leading-none text-slate-700">{(gpsDistPoints.reduce((a, b) => a + b, 0) / (gpsDistPoints.length || 1)).toFixed(0)}</span>
+            <span className="text-xs font-bold text-slate-400 mb-1">m</span>
           </div>
-        </div>
-        <div className={`border-2 rounded-xl p-4 ${scoreBg(lastWellness?.wellnessScore)}`}>
-          <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-60">Bem-Estar (último)</p>
-          <p className="text-3xl font-black">{lastWellness?.wellnessScore?.toFixed(1) ?? '—'}</p>
-          <p className="text-[10px] mt-1 opacity-70">Média 30d: {avgWellness ? avgWellness.toFixed(1) : '—'}</p>
-        </div>
-        <div className={`border-2 rounded-xl p-4 ${Object.keys(painCodeMap).length > 0 ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-200'}`}>
-          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Dores relatadas</p>
-          <p className={`text-3xl font-black ${Object.keys(painCodeMap).length > 0 ? 'text-orange-600' : 'text-black'}`}>{wellinessHistory.filter(r => r.temDor).length}</p>
-          <p className="text-[10px] text-slate-500 mt-1">{Object.keys(painCodeMap).length} regiões afetadas</p>
+          <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">{gpsHistory.length} sessões registradas</p>
         </div>
       </div>
 
@@ -680,57 +838,52 @@ function IndividualContent() {
                   { label: 'Humor', key: 'humor', color: '#10b981', invert: false },
                   { label: 'Score Geral', key: 'wellnessScore', color: '#f59e0b', invert: false },
                 ].map(({ label, key, color, invert }) => {
-                  const pts = wellinessHistory.slice(-30).map(r => r[key] !== null ? (invert ? 6 - r[key] : r[key]) : null)
-                  const last = pts.filter(Boolean).slice(-1)[0]
+                  const vals = wellinessHistory.slice(-30).map(r => invert ? (6 - r[key]) : r[key])
+                  const last = wellinessHistory[wellinessHistory.length - 1][key]
                   return (
-                    <div key={key} className="border border-slate-200 rounded-xl p-3">
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
-                        <span className="text-sm font-black" style={{ color }}>{last?.toFixed(1) ?? '—'}</span>
+                    <div key={key} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                      <p className="text-[10px] font-black uppercase text-slate-400 mb-1">{label}</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xl font-black">{last || '—'}</span>
+                        <div className="w-20"><Sparkline values={vals} color={color} height={20} /></div>
                       </div>
-                      <Sparkline values={pts} color={color} height={36} />
                     </div>
                   )
                 })}
               </div>
               <div className="border border-slate-200 rounded-xl p-4">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Histórico completo</p>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Histórico de Bem-Estar</p>
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-xs">
                     <thead>
                       <tr className="border-b-2 border-slate-200">
                         <SortTh label="Data" col="date" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
-                        <SortTh label="Score" col="wellnessScore" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
                         <SortTh label="Sono" col="sono" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
                         <SortTh label="Fadiga" col="fadiga" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
                         <SortTh label="DOMS" col="doms" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
                         <SortTh label="Estresse" col="estresse" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
                         <SortTh label="Humor" col="humor" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
-                        <th className="text-left py-1.5 pr-3 font-black uppercase tracking-widest text-[9px] text-slate-400">Urina</th>
-                        <th className="text-left py-1.5 pr-3 font-black uppercase tracking-widest text-[9px] text-slate-400">Dor</th>
-                        <SortTh label="sRPE" col="srpe" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
-                        <th className="text-left py-1.5 pr-3 font-black uppercase tracking-widest text-[9px] text-slate-400">UA</th>
+                        <SortTh label="Score" col="wellnessScore" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
+                        <th className="text-left py-1.5 px-2 font-black uppercase tracking-widest text-[9px] text-slate-400">Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedWellness.map((r, i) => {
-                        const post = bemEstarData.find(p => p.playerName === athlete && p.type === 'post' && p.date === r.date)
-                        return (
-                          <tr key={i} className="border-b border-slate-100 hover:bg-amber-50">
-                            <td className="py-1.5 pr-3 font-bold text-slate-600">{r.date}</td>
-                            <td className="py-1.5 pr-3"><span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${scoreBg(r.wellnessScore)}`}>{r.wellnessScore?.toFixed(1) ?? '—'}</span></td>
-                            <td className="py-1.5 pr-3">{r.sono ?? '—'}</td>
-                            <td className="py-1.5 pr-3">{r.fadiga ?? '—'}</td>
-                            <td className="py-1.5 pr-3">{r.doms ?? '—'}</td>
-                            <td className="py-1.5 pr-3">{r.estresse ?? '—'}</td>
-                            <td className="py-1.5 pr-3">{r.humor ?? '—'}</td>
-                            <td className="py-1.5 pr-3">{r.corUrina ?? '—'}</td>
-                            <td className="py-1.5 pr-3">{r.temDor ? <span className="text-[9px] bg-orange-100 text-orange-600 px-1 py-0.5 rounded font-black">DOR</span> : '—'}</td>
-                            <td className="py-1.5 pr-3">{post?.srpe ?? '—'}</td>
-                            <td className="py-1.5 pr-3 font-bold text-purple-600">{post?.srpeLoad?.toFixed(0) ?? '—'}</td>
-                          </tr>
-                        )
-                      })}
+                      {sortedWellness.map((row, i) => (
+                        <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="py-1.5 pr-3 font-bold text-slate-600">{row.date}</td>
+                          <td className="py-1.5 pr-3">{row.sono}</td>
+                          <td className="py-1.5 pr-3">{row.fadiga}</td>
+                          <td className="py-1.5 pr-3">{row.doms}</td>
+                          <td className="py-1.5 pr-3">{row.estresse}</td>
+                          <td className="py-1.5 pr-3">{row.humor}</td>
+                          <td className={`py-1.5 pr-3 font-black ${scoreBg(row.wellnessScore).split(' ')[1]}`}>{row.wellnessScore?.toFixed(1)}</td>
+                          <td className="py-1.5 pr-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${scoreBg(row.wellnessScore)}`}>
+                              {row.wellnessScore >= 3.5 ? 'ÓTIMO' : row.wellnessScore >= 2.5 ? 'ALERTA' : 'CRÍTICO'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -743,73 +896,81 @@ function IndividualContent() {
       {/* ── DOR LOCALIZADA ── */}
       {activeTab === 'dor' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="border border-slate-200 rounded-xl p-4">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Mapa Anatômico de Dores</p>
-            {Object.keys(painCodeMap).length > 0 ? (
-              <AnatomyFigure activeRegions={painCodeMap} hoveredRegion={hoveredRegion} onHover={setHoveredRegion} />
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-slate-300">
-                <svg className="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <p className="text-sm font-medium">Sem dores relatadas neste histórico</p>
-              </div>
-            )}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4">Mapa de Dores (Acumulado)</p>
+            <AnatomyFigure activeRegions={painCodeMap} hoveredRegion={hoveredRegion} onHover={setHoveredRegion} />
           </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="border border-slate-200 rounded-xl p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Regiões Afetadas — Frequência total</p>
-              {Object.keys(painCodeMap).length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {Object.entries(painCodeMap).sort((a, b) => b[1] - a[1]).map(([code, count]) => {
-                    const label = DOR_LABELS[code] || ANATOMY_POINTS[code]?.label || code
-                    const maxC = Math.max(...Object.values(painCodeMap))
-                    const intensity = count / maxC
-                    const barColor = intensity > 0.66 ? 'bg-red-500' : intensity > 0.33 ? 'bg-orange-400' : 'bg-amber-300'
-                    const textColor = intensity > 0.66 ? 'text-red-600' : intensity > 0.33 ? 'text-orange-500' : 'text-amber-500'
-                    return (
-                      <div key={code} className="flex items-center gap-2"
-                        onMouseEnter={() => setHoveredRegion(code)}
-                        onMouseLeave={() => setHoveredRegion(null)}>
-                        <span className="text-[10px] font-black text-slate-400 w-6 text-right shrink-0">{code}</span>
-                        <span className="text-xs font-bold w-36 shrink-0">{label}</span>
-                        <div className="flex-1 bg-slate-100 rounded-full h-2"><div className={`${barColor} h-2 rounded-full`} style={{ width: `${(count / maxC) * 100}%` }} /></div>
-                        <span className={`text-xs font-black w-8 text-right ${textColor}`}>{count}×</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : <p className="text-slate-400 text-sm text-center py-4">Sem regiões afetadas</p>}
-            </div>
-
-            <div className="border border-slate-200 rounded-xl p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Histórico de ocorrências</p>
-              {painHistory.length > 0 ? (
-                <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-                  {painHistory.map((r, i) => (
-                    <div key={i} className="border-l-2 border-orange-300 pl-3 py-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-700">{r.date}</span>
-                        <span className="text-[9px] bg-orange-100 text-orange-600 font-black px-2 py-0.5 rounded-full">DOR</span>
-                      </div>
-                      <p className="text-[10px] text-slate-600 mt-0.5 leading-relaxed">{r.dorLocalizada}</p>
+          <div className="flex flex-col gap-5">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Top Regiões Relatadas</p>
+              <div className="flex flex-col gap-3">
+                {Object.entries(painCodeMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([code, count]) => (
+                  <div key={code} className={`flex items-center justify-between p-2 rounded-lg transition-colors ${hoveredRegion === code ? 'bg-amber-50' : 'bg-slate-50'}`}
+                    onMouseEnter={() => setHoveredRegion(code)} onMouseLeave={() => setHoveredRegion(null)}>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-orange-500" />
+                      <span className="text-xs font-black uppercase text-slate-700">{DOR_LABELS[code] || code}</span>
                     </div>
-                  ))}
-                </div>
-              ) : <p className="text-slate-400 text-sm text-center py-4">Sem histórico</p>}
+                    <span className="text-xs font-black text-orange-600">{count}× relatado</span>
+                  </div>
+                ))}
+                {Object.keys(painCodeMap).length === 0 && <p className="text-sm text-slate-300 text-center py-4">Nenhum relato de dor recente.</p>}
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Últimos Relatos</p>
+              <div className="flex flex-col gap-2">
+                {painHistory.map((r, i) => (
+                  <div key={i} className="border-l-2 border-amber-500 pl-3 py-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase">{r.date}</p>
+                    <p className="text-xs font-bold text-slate-700">{r.dorLocalizada}</p>
+                    {r.comentariosDor && <p className="text-[10px] text-slate-500 italic mt-0.5">"{r.comentariosDor}"</p>}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* MODAL CONFIG POSIÇÕES */}
+      {showPositionConfig && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="bg-slate-900 p-4 flex justify-between items-center">
+              <h3 className="text-white font-black uppercase tracking-widest text-sm">Configurar Posições</h3>
+              <button onClick={() => setShowPositionConfig(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="p-4 max-h-[400px] overflow-y-auto">
+              <p className="text-[10px] text-slate-500 font-bold uppercase mb-4 italic">Defina a posição de cada atleta para habilitar comparações por função no radar.</p>
+              <div className="flex flex-col gap-2">
+                {allAthletes.map(name => (
+                  <div key={name} className="flex items-center justify-between py-2 border-b border-slate-100">
+                    <span className="text-xs font-black text-slate-700">{name}</span>
+                    <select value={playerPositions[name] || ''} onChange={e => setPlayerPositions(prev => ({ ...prev, [name]: e.target.value }))}
+                      className="text-xs font-bold border rounded px-2 py-1 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                      <option value="">Equipe</option>
+                      {POSICOES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100">
+              <button onClick={() => setShowPositionConfig(false)} className="w-full bg-amber-500 text-black font-black py-2 rounded-lg text-xs uppercase tracking-widest hover:bg-amber-600 transition-colors">Salvar e Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
 
-export default function IndividualDashboard() {
+export default function IndividualPage() {
   return (
-    <div className="min-h-screen bg-white text-black p-4 font-sans">
-      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="text-slate-400 font-black uppercase tracking-widest text-sm">Carregando...</div></div>}>
-        <IndividualContent />
-      </Suspense>
-    </div>
+    <Suspense fallback={<div className="p-10 text-center font-black text-slate-400 animate-pulse uppercase tracking-widest">Carregando Painel...</div>}>
+      <IndividualContent />
+    </Suspense>
   )
 }
