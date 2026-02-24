@@ -160,11 +160,17 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, onDetail }) {
 // ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
 export default function DiarioDashboard() {
   const router = useRouter()
-  const { gpsData, bemEstarData, vmaxBaseline, isLoadingBemEstar, fetchBemEstar, uploadGpsFile } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, isLoadingBemEstar, fetchBemEstar, uploadGpsFile, playerPositions } = useData()
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0])
   const [selectedGpsDate, setSelectedGpsDate] = useState(null)
   const [selectedSessionId, setSelectedSessionId] = useState(null)
   const [filterAlert, setFilterAlert] = useState(false)
+  const [filterPosition, setFilterPosition] = useState('')
+
+  const availablePositions = useMemo(() => {
+    const set = new Set(Object.values(playerPositions).filter(Boolean))
+    return Array.from(set).sort()
+  }, [playerPositions])
 
   // Datas disponíveis no GPS
   const gpsDates = useMemo(() => gpsData.map(s => s.date).sort().reverse(), [gpsData])
@@ -250,7 +256,11 @@ export default function DiarioDashboard() {
     })
   }, [athletes])
 
-  const displayed = filterAlert ? alerts : athletes
+  const displayed = useMemo(() => {
+    let list = filterAlert ? alerts : athletes
+    if (filterPosition) list = list.filter(a => playerPositions[a.name] === filterPosition)
+    return list
+  }, [filterAlert, alerts, athletes, filterPosition, playerPositions])
 
   // Datas disponíveis no bem-estar
   const bemEstarDates = useMemo(() => {
@@ -351,6 +361,16 @@ export default function DiarioDashboard() {
           >
             ⚠ Alertas {alerts.length > 0 && <span className="bg-white/30 px-1.5 rounded-full">{alerts.length}</span>}
           </button>
+          {availablePositions.length > 0 && (
+            <select
+              value={filterPosition}
+              onChange={e => setFilterPosition(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-[10px] font-black bg-white text-slate-700 uppercase tracking-widest focus:border-amber-400 focus:outline-none"
+            >
+              <option value="">Todas as posições</option>
+              {availablePositions.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
         </div>
 
         {/* RESUMO DO DIA */}
