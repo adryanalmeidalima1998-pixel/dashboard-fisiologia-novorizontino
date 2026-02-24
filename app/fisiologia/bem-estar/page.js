@@ -55,10 +55,16 @@ function MetricBar({ value, max = 5, invert = false, label }) {
 
 export default function BemEstarPage() {
   const router = useRouter()
-  const { bemEstarData, isLoadingBemEstar, fetchBemEstar } = useData()
+  const { bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions } = useData()
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedAtleta, setSelectedAtleta] = useState('Todos')
+  const [filterPosition, setFilterPosition] = useState('')
   const [activeTab, setActiveTab] = useState('pre') // 'pre' | 'post' | 'dor'
+
+  const availablePositions = useMemo(() => {
+    const set = new Set(Object.values(playerPositions).filter(Boolean))
+    return Array.from(set).sort()
+  }, [playerPositions])
 
   useEffect(() => {
     if (bemEstarData.length === 0) fetchBemEstar()
@@ -83,9 +89,10 @@ export default function BemEstarPage() {
     return bemEstarData.filter(r => {
       if (r.date !== currentDate) return false
       if (selectedAtleta !== 'Todos' && r.playerName !== selectedAtleta) return false
+      if (filterPosition && playerPositions[r.playerName] !== filterPosition) return false
       return true
     })
-  }, [bemEstarData, currentDate, selectedAtleta])
+  }, [bemEstarData, currentDate, selectedAtleta, filterPosition, playerPositions])
 
   const preData = filtered.filter(r => r.type === 'pre')
   const postData = filtered.filter(r => r.type === 'post')
@@ -155,6 +162,19 @@ export default function BemEstarPage() {
               {atletas.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
+          {availablePositions.length > 0 && selectedAtleta === 'Todos' && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Posição:</span>
+              <select
+                value={filterPosition}
+                onChange={e => setFilterPosition(e.target.value)}
+                className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-black bg-white focus:border-amber-500 focus:outline-none"
+              >
+                <option value="">Todas</option>
+                {availablePositions.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* RESUMO */}
