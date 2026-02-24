@@ -260,7 +260,7 @@ export function DataProvider({ children }) {
 
   const removeNameAlias = useCallback(async (id) => {
     try {
-      const res = await fetch(\`/api/name-aliases/\${id}\`, { method: 'DELETE' })
+      const res = await fetch(`/api/name-aliases/${id}`, { method: 'DELETE' })
       if (!res.ok) return { success: false }
       setNameAliases(prev => prev.filter(a => a.id !== id))
       return { success: true }
