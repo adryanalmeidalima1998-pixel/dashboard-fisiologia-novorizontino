@@ -91,11 +91,44 @@ export default function Fisiologia() {
     {
       id: 'individual',
       titulo: 'Atleta Individual',
-      descricao: 'Histórico completo por atleta. Tendências de bem-estar, carga GPS e alertas personalizados.',
+      descricao: 'Histórico completo por atleta. Radar de métricas, dor localizada com boneco anatômico, GPS e bem-estar.',
       rota: '/fisiologia/individual',
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      )
+    },
+    {
+      id: 'exposicao',
+      titulo: 'Exposição à Velocidade',
+      descricao: 'Última exposição a ≥90% Vmax, sprint e HSR alto. Atletas em risco de destreino de velocidade.',
+      rota: '/fisiologia/exposicao',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      )
+    },
+    {
+      id: 'exercicios',
+      titulo: 'Biblioteca de Exercícios',
+      descricao: 'Catálogo de tarefas com custo GPS esperado (m/min, HSR, ACC/DEC, WCS). Sua ferramenta de prescrição.',
+      rota: '/fisiologia/exercicios',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+      )
+    },
+    {
+      id: 'relatorios',
+      titulo: 'Relatórios Automáticos',
+      descricao: 'Pós-sessão, pós-jogo, semanal e individual. Recomendações automáticas para decisões rápidas.',
+      rota: '/fisiologia/relatorios',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       )
     },
@@ -298,7 +331,7 @@ export default function Fisiologia() {
         )}
 
         {/* GRID DE FERRAMENTAS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {ferramentas.map((item) => (
             <button
               key={item.id}
@@ -329,7 +362,7 @@ export default function Fisiologia() {
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 bg-amber-500 rounded-full" />
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-              Bem-estar via Google Sheets · GPS via Catapult CSV · CMJ em breve
+              Bem-estar via Google Sheets · GPS via Catapult CSV · Radar por posição · Exposição à velocidade · Relatórios automáticos
             </span>
           </div>
           <p className="text-[10px] text-slate-500 font-black italic tracking-tight uppercase">© Fisiologia GN</p>
