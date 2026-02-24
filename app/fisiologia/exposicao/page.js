@@ -41,9 +41,16 @@ function SortTh({ label, col, sort, onSort }) {
 
 export default function ExposicaoDashboard() {
   const router = useRouter()
-  const { gpsData, bemEstarData, vmaxBaseline } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, playerPositions } = useData()
   const [sortMain, setSortMain] = useState({ col: 'diasSemVmax90', dir: 'desc' })
   const [filterRisco, setFilterRisco] = useState(false)
+  const [filterPosition, setFilterPosition] = useState('')
+
+  // Posições únicas disponíveis
+  const availablePositions = useMemo(() => {
+    const set = new Set(Object.values(playerPositions).filter(Boolean))
+    return Array.from(set).sort()
+  }, [playerPositions])
 
   function toggleSort(current, col, setter) {
     setter(current.col === col ? { col, dir: current.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' })
@@ -141,6 +148,7 @@ export default function ExposicaoDashboard() {
   const sortedData = useMemo(() => {
     let list = [...exposureData]
     if (filterRisco) list = list.filter(d => d.riscoDestreino)
+    if (filterPosition) list = list.filter(d => playerPositions[d.athlete] === filterPosition)
     const { col, dir } = sortMain
     list.sort((a, b) => {
       if (col === 'athlete') return dir === 'asc' ? a.athlete.localeCompare(b.athlete) : b.athlete.localeCompare(a.athlete)
@@ -149,7 +157,7 @@ export default function ExposicaoDashboard() {
       return dir === 'desc' ? vb - va : va - vb
     })
     return list
-  }, [exposureData, sortMain, filterRisco])
+  }, [exposureData, sortMain, filterRisco, filterPosition, playerPositions])
 
   const riscoCount = exposureData.filter(d => d.riscoDestreino && !d.noData).length
   const semDados = exposureData.filter(d => d.noData).length
@@ -229,6 +237,18 @@ export default function ExposicaoDashboard() {
             className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${filterRisco ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
             {filterRisco ? '✓ ' : ''}Só em risco
           </button>
+          {availablePositions.length > 0 && (
+            <select
+              value={filterPosition}
+              onChange={e => setFilterPosition(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-1 text-xs font-black bg-white text-slate-700 focus:border-amber-400 focus:outline-none">
+              <option value="">Todas as posições</option>
+              {availablePositions.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
+          {filterPosition && (
+            <button onClick={() => setFilterPosition('')} className="text-[10px] text-amber-600 font-black hover:underline">✕ Limpar posição</button>
+          )}
         </div>
 
         {/* TABELA PRINCIPAL */}
