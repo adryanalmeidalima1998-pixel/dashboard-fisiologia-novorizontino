@@ -7,36 +7,51 @@ import { useEffect, useState, useRef } from 'react'
 export default function Fisiologia() {
   const router = useRouter()
   const {
-    gpsData, isLoadingGps, uploadStatus, uploadGpsFile, deleteGpsSession,
+    gpsData, isLoadingGps, uploadStatus, uploadQueue, uploadGpsFile, uploadMultipleGpsFiles, deleteGpsSession,
     bemEstarData, isLoadingBemEstar, fetchBemEstar,
   } = useData()
   const [dragOver, setDragOver] = useState(false)
-  const [pendingFile, setPendingFile]       = useState(null)
-  const [sessionNameInput, setSessionNameInput] = useState('')
+  const [pendingFiles, setPendingFiles] = useState([])   // array de { file, name }
+  const [editingIdx, setEditingIdx] = useState(null)
   const nameInputRef = useRef(null)
 
   useEffect(() => {
     if (bemEstarData.length === 0) fetchBemEstar()
   }, [])
 
-  function handleFileSelect(file) {
-    if (!file || !file.name.endsWith('.csv')) return
-    const defaultName = file.name.replace(/\.csv$/i, '')
-    setPendingFile(file)
-    setSessionNameInput(defaultName)
-    setTimeout(() => nameInputRef.current?.focus(), 50)
+  // Quando arquivos são selecionados, abre modal de confirmação
+  function handleFilesSelect(files) {
+    if (!files || files.length === 0) return
+    const validFiles = Array.from(files).filter(f => f.name.endsWith('.csv'))
+    if (validFiles.length === 0) return
+    setPendingFiles(validFiles.map(f => ({ file: f, name: f.name.replace(/\.csv$/i, '') })))
+    setEditingIdx(null)
   }
 
   async function confirmUpload() {
-    if (!pendingFile) return
-    await uploadGpsFile(pendingFile, sessionNameInput.trim())
-    setPendingFile(null)
-    setSessionNameInput('')
+    if (pendingFiles.length === 0) return
+    if (pendingFiles.length === 1) {
+      await uploadGpsFile(pendingFiles[0].file, pendingFiles[0].name)
+    } else {
+      const filesWithNames = pendingFiles.map(p => {
+        const dt = new DataTransfer()
+        dt.items.add(p.file)
+        return { file: p.file, name: p.name }
+      })
+      // Usa uploadMultipleGpsFiles mas com nomes personalizados
+      const namedFiles = pendingFiles.map(p => {
+        const renamed = new File([p.file], p.name + '.csv', { type: p.file.type })
+        return renamed
+      })
+      await uploadMultipleGpsFiles(namedFiles)
+    }
+    setPendingFiles([])
+    setEditingIdx(null)
   }
 
   function cancelUpload() {
-    setPendingFile(null)
-    setSessionNameInput('')
+    setPendingFiles([])
+    setEditingIdx(null)
   }
 
   const ferramentas = [
@@ -48,6 +63,17 @@ export default function Fisiologia() {
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      )
+    },
+    {
+      id: 'bemEstar',
+      titulo: 'Bem-Estar & sRPE',
+      descricao: 'Monitoramento completo de bem-estar, dor, hidratação e percepção de esforço dos atletas.',
+      rota: '/fisiologia/bem-estar',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
         </svg>
       )
     },
@@ -74,6 +100,8 @@ export default function Fisiologia() {
       )
     },
   ]
+
+  const isUploading = uploadQueue.some(q => q.status === 'uploading')
 
   return (
     <div className="min-h-screen bg-white text-black p-4 font-sans">
@@ -112,13 +140,21 @@ export default function Fisiologia() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={fetchBemEstar}
-              disabled={isLoadingBemEstar}
-              className="bg-slate-100 hover:bg-amber-500 hover:text-black text-slate-700 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
-            >
-              {isLoadingBemEstar ? '...' : '↻ Atualizar'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => router.push('/fisiologia/bem-estar')}
+                className="bg-amber-500 hover:bg-amber-400 text-black px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all"
+              >
+                Ver dados
+              </button>
+              <button
+                onClick={fetchBemEstar}
+                disabled={isLoadingBemEstar}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
+              >
+                {isLoadingBemEstar ? '...' : '↻'}
+              </button>
+            </div>
           </div>
 
           {/* GPS */}
@@ -126,11 +162,11 @@ export default function Fisiologia() {
             className={`border-2 rounded-xl p-4 transition-all ${dragOver ? 'border-amber-500 bg-amber-50' : 'border-slate-200'}`}
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFileSelect(e.dataTransfer.files[0]) }}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFilesSelect(e.dataTransfer.files) }}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full ${isLoadingGps ? 'bg-amber-500 animate-pulse' : gpsData.length > 0 ? 'bg-green-500' : 'bg-slate-300'}`} />
+                <div className={`w-3 h-3 rounded-full ${isLoadingGps || isUploading ? 'bg-amber-500 animate-pulse' : gpsData.length > 0 ? 'bg-green-500' : 'bg-slate-300'}`} />
                 <div>
                   <p className="text-xs font-black uppercase tracking-widest text-slate-500">GPS Catapult</p>
                   <p className="text-sm font-bold text-black">
@@ -138,18 +174,40 @@ export default function Fisiologia() {
                   </p>
                 </div>
               </div>
-              <label className={`cursor-pointer px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${uploadStatus?.type === 'loading' ? 'bg-slate-200 text-slate-400 cursor-wait' : 'bg-amber-500 hover:bg-amber-400 text-black'}`}>
-                + Upload CSV
-                <input type="file" accept=".csv" className="hidden" disabled={uploadStatus?.type === 'loading'} onChange={e => { handleFileSelect(e.target.files[0]); e.target.value = '' }} />
+              <label className={`cursor-pointer px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isUploading ? 'bg-slate-200 text-slate-400 cursor-wait' : 'bg-amber-500 hover:bg-amber-400 text-black'}`}>
+                + Upload CSV(s)
+                <input
+                  type="file"
+                  accept=".csv"
+                  multiple
+                  className="hidden"
+                  disabled={isUploading}
+                  onChange={e => { handleFilesSelect(e.target.files); e.target.value = '' }}
+                />
               </label>
             </div>
 
-            {uploadStatus && !pendingFile && (
+            {/* Fila de upload múltiplo */}
+            {uploadQueue.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1">
+                {uploadQueue.map((item, i) => (
+                  <div key={i} className={`flex items-center gap-2 text-xs px-2 py-1 rounded-lg font-bold ${item.status === 'success' ? 'bg-green-100 text-green-700' : item.status === 'error' ? 'bg-red-100 text-red-700' : item.status === 'uploading' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                    <span>{item.status === 'uploading' ? '⏳' : item.status === 'success' ? '✓' : item.status === 'error' ? '✕' : '○'}</span>
+                    <span className="truncate max-w-[200px]">{item.file.name}</span>
+                    {item.message && <span className="text-[10px] ml-auto truncate">{item.message}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Feedback upload único */}
+            {uploadStatus && uploadQueue.length === 0 && (
               <div className={`mt-2 text-xs font-bold px-2 py-1.5 rounded-lg ${uploadStatus.type === 'success' ? 'bg-green-100 text-green-700' : uploadStatus.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                 {uploadStatus.message}
               </div>
             )}
 
+            {/* Lista de sessões */}
             {gpsData.length > 0 && (
               <div className="mt-3 flex flex-col gap-0.5 max-h-40 overflow-y-auto">
                 {Object.entries(
@@ -173,40 +231,66 @@ export default function Fisiologia() {
               </div>
             )}
 
-            {gpsData.length === 0 && !uploadStatus && (
-              <p className="mt-2 text-[10px] text-slate-400 font-medium">Arraste um .csv ou clique em "Upload CSV" — dados salvos permanentemente</p>
+            {gpsData.length === 0 && !uploadStatus && uploadQueue.length === 0 && (
+              <p className="mt-2 text-[10px] text-slate-400 font-medium">Arraste um ou mais .csv ou clique em "Upload CSV(s)" — você pode selecionar vários de uma vez</p>
             )}
           </div>
         </div>
 
-        {/* MODAL DE NOME DA SESSÃO */}
-        {pendingFile && (
+        {/* MODAL DE CONFIRMAÇÃO DE ARQUIVOS */}
+        {pendingFiles.length > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-md mx-4">
-              <h3 className="text-base font-black uppercase tracking-tighter text-black mb-1">Nome da Sessão</h3>
+            <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-lg mx-4">
+              <h3 className="text-base font-black uppercase tracking-tighter text-black mb-1">
+                {pendingFiles.length === 1 ? 'Nome da Sessão' : `${pendingFiles.length} Sessões para Upload`}
+              </h3>
               <p className="text-xs text-slate-500 font-medium mb-4">
-                Arquivo: <span className="font-bold text-slate-700">{pendingFile.name}</span><br />
-                Edite o nome para identificar esta sessão (ex: "Treino Manhã", "Jogo Sub-20")
+                {pendingFiles.length === 1
+                  ? 'Edite o nome para identificar esta sessão'
+                  : 'Edite os nomes clicando em cada um. Confirme para enviar todos.'}
               </p>
-              <input
-                ref={nameInputRef}
-                type="text"
-                value={sessionNameInput}
-                onChange={e => setSessionNameInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') confirmUpload(); if (e.key === 'Escape') cancelUpload() }}
-                placeholder="Nome da sessão..."
-                className="w-full border-2 border-slate-200 focus:border-amber-500 rounded-xl px-4 py-2.5 text-sm font-bold text-black focus:outline-none mb-4"
-              />
+
+              <div className="flex flex-col gap-2 max-h-64 overflow-y-auto mb-4">
+                {pendingFiles.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400 font-black w-5 text-right">{i + 1}.</span>
+                    {editingIdx === i ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={p.name}
+                        onChange={e => setPendingFiles(prev => prev.map((f, idx) => idx === i ? { ...f, name: e.target.value } : f))}
+                        onBlur={() => setEditingIdx(null)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingIdx(null) }}
+                        className="flex-1 border-2 border-amber-400 rounded-lg px-3 py-1.5 text-xs font-bold text-black focus:outline-none"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => setEditingIdx(i)}
+                        className="flex-1 text-left border border-slate-200 hover:border-amber-400 rounded-lg px-3 py-1.5 text-xs font-bold text-black transition-colors"
+                      >
+                        {p.name}
+                        <span className="ml-2 text-[9px] text-slate-400">✏</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                      className="text-red-400 hover:text-red-600 font-black text-xs px-1"
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+
               <div className="flex gap-2 justify-end">
                 <button onClick={cancelUpload} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
                   Cancelar
                 </button>
                 <button
                   onClick={confirmUpload}
-                  disabled={!sessionNameInput.trim()}
+                  disabled={pendingFiles.some(p => !p.name.trim())}
                   className="px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-amber-500 text-black hover:bg-amber-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Salvar Sessão
+                  {pendingFiles.length === 1 ? 'Salvar Sessão' : `Salvar ${pendingFiles.length} Sessões`}
                 </button>
               </div>
             </div>
@@ -214,7 +298,7 @@ export default function Fisiologia() {
         )}
 
         {/* GRID DE FERRAMENTAS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {ferramentas.map((item) => (
             <button
               key={item.id}
