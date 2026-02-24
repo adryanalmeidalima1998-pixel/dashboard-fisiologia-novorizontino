@@ -124,24 +124,50 @@ export default function SemanalDashboard() {
     })
   }, [gpsData, monday, sunday])
 
-  // Atletas únicos com dados na semana
+  // Atletas únicos com dados na semana — normaliza nomes para evitar duplicatas
+  // ex: "João Pedro" e "JOAO PEDRO" do formulário vs GPS viram a mesma entrada
   const weekAthletes = useMemo(() => {
-    const names = new Set([
-      ...weekBemEstar.map(r => r.playerName),
-      ...weekGps.flatMap(s => s.rows.filter(r => r.periodNumber === 0 && !r.isOutlier).map(r => r.playerName))
-    ])
-    let list = Array.from(names).sort()
+    // Mapeia normalized → nome canônico (primeiro encontrado como referência)
+    const normToCanonical = {}
+    const addName = (name) => {
+      if (!name) return
+      const norm = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z\s]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
+      if (!normToCanonical[norm]) normToCanonical[norm] = name
+    }
+    // GPS é fonte primária para nome canônico
+    weekGps.flatMap(s => s.rows.filter(r => r.periodNumber === 0 && !r.isOutlier).map(r => r.playerName)).forEach(addName)
+    weekBemEstar.map(r => r.playerName).forEach(addName)
+
+    let list = Object.values(normToCanonical).sort()
     if (filterPosition) list = list.filter(a => playerPositions[a] === filterPosition)
     return list
   }, [weekBemEstar, weekGps, filterPosition, playerPositions])
 
-  // sRPE-load por atleta por dia
+  // Helper: normaliza um nome para comparação
+  function normName(n) {
+    if (!n) return ''
+    return n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z\s]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  }
+
+  // Mapeia norm → nome canônico (usando weekAthletes já deduplucado)
+  const canonicalByNorm = useMemo(() => {
+    const map = {}
+    weekAthletes.forEach(a => { map[normName(a)] = a })
+    return map
+  }, [weekAthletes])
+
+  // Resolve qualquer nome para o canônico
+  const resolveCanonical = (name) => canonicalByNorm[normName(name)] || name
+
+  // sRPE-load por atleta por dia — usa normalização de nome para agrupar variações
   const srpeMatrix = useMemo(() => {
     const matrix = {}
     for (const athlete of weekAthletes) {
       matrix[athlete] = {}
       for (const day of weekDays) {
-        const posts = weekBemEstar.filter(r => r.playerName === athlete && r.type === 'post' && r.date === day)
+        const posts = weekBemEstar.filter(r =>
+          normName(r.playerName) === normName(athlete) && r.type === 'post' && r.date === day
+        )
         const load = posts.reduce((s, r) => s + (r.srpeLoad || 0), 0)
         matrix[athlete][day] = load || null
       }
@@ -185,7 +211,7 @@ export default function SemanalDashboard() {
       const prevLoads = [1, 2, 3].map(w => {
         const { monday: pm, sunday: ps } = getWeekBounds(weekOffset - w)
         const posts = bemEstarData.filter(r => {
-          if (r.playerName !== athlete || r.type !== 'post' || !r.srpeLoad) return false
+          if (normName(r.playerName) !== normName(athlete) || r.type !== 'post' || !r.srpeLoad) return false
           const d = new Date(r.date + 'T12:00:00')
           return d >= pm && d <= ps
         })
@@ -229,7 +255,7 @@ export default function SemanalDashboard() {
   }, [weekAthletes, gpsWeekly, sortGps])
 
   const sortedBemAthletes = useMemo(() => {
-    const list = weekAthletes.filter(a => weekBemEstar.some(r => r.playerName === a))
+    const list = weekAthletes.filter(a => weekBemEstar.some(r => normName(r.playerName) === normName(a)))
     const { col, dir } = sortBem
     list.sort((a, b) => {
       if (col === 'name') return dir === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
@@ -532,7 +558,7 @@ export default function SemanalDashboard() {
               // Média do grupo por dia e geral
               const dayGroupAvgs = weekDays.map(d => {
                 const scores = sortedBemAthletes.map(a => {
-                  const pre = weekBemEstar.find(r => r.playerName === a && r.type === 'pre' && r.date === d)
+                  const pre = weekBemEstar.find(r => normName(r.playerName) === normName(a) && r.type === 'pre' && r.date === d)
                   return pre?.wellnessScore || null
                 }).filter(Boolean)
                 return scores.length ? scores.reduce((a,b) => a+b,0) / scores.length : null
@@ -558,12 +584,12 @@ export default function SemanalDashboard() {
                   <tbody>
                     {sortedBemAthletes.map((athlete, idx) => {
                       const scores = weekDays.map(d => {
-                        const pre = weekBemEstar.find(r => r.playerName === athlete && r.type === 'pre' && r.date === d)
+                        const pre = weekBemEstar.find(r => normName(r.playerName) === normName(athlete) && r.type === 'pre' && r.date === d)
                         return pre?.wellnessScore || null
                       })
                       const validScores = scores.filter(s => s !== null)
                       const avgScore = validScores.length > 0 ? validScores.reduce((a, b) => a + b, 0) / validScores.length : null
-                      const hasDor = weekBemEstar.some(r => r.playerName === athlete && r.temDor)
+                      const hasDor = weekBemEstar.some(r => normName(r.playerName) === normName(athlete) && r.temDor)
                       const hasBaixo = scores.some(s => s !== null && s < 2.5)
                       const belowGroup = groupWellnessAvg && avgScore && avgScore < groupWellnessAvg * 0.8
 
