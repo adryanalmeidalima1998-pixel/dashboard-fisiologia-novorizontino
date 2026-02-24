@@ -469,6 +469,17 @@ export function DataProvider({ children }) {
       bemEstarError,
       fetchBemEstar,
       vmaxBaseline,
+      playerPositions: (() => {
+        const map = {}
+        for (const session of gpsData) {
+          for (const row of session.rows) {
+            if (row.playerName && row.positionName && !map[row.playerName]) {
+              map[row.playerName] = row.positionName
+            }
+          }
+        }
+        return map
+      })(),
       canonicalMap,
       getBemEstarForAthlete,
       getUnifiedAthletes,
