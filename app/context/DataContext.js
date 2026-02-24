@@ -262,11 +262,22 @@ export function DataProvider({ children }) {
   const deleteGpsSession = useCallback(async (id) => {
     try {
       const res = await fetch(`/api/gps/sessions/${id}`, { method: 'DELETE' })
-      if (res.ok) await fetchGpsSessions()
+      const data = await res.json()
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Erro ao excluir sessão.' }
+      }
+      // Atualiza estado local imediatamente (otimista)
+      setGpsData(prev => {
+        const next = prev.filter(s => s.id !== id)
+        setVmaxBaseline(calcVmaxBaseline(next))
+        return next
+      })
+      return { success: true }
     } catch (e) {
       console.error('Erro ao deletar sessão:', e)
+      return { success: false, error: 'Falha de rede.' }
     }
-  }, [fetchGpsSessions])
+  }, [])
 
   // ── Bem-estar do Google Sheets ────────────────────────────────────────────
   const fetchBemEstar = useCallback(async () => {
