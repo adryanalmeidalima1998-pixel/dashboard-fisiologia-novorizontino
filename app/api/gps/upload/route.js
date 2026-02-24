@@ -84,8 +84,13 @@ function parseGpsCSV(csvText) {
 export async function POST(request) {
   try {
     const formData = await request.formData()
-    const file        = formData.get('file')
-    const sessionName = (formData.get('session_name') || '').trim()
+    const file          = formData.get('file')
+    const sessionName   = (formData.get('session_name') || '').trim()
+    // Novos metadados
+    const sessionType   = (formData.get('session_type') || 'treino').trim()   // 'treino' | 'jogo'
+    const sessionPeriod = (formData.get('session_period') || '').trim()       // 'manha' | 'tarde' | 'noite'
+    const opponent      = (formData.get('opponent') || '').trim()             // nome do adversário (se jogo)
+    const result        = (formData.get('result') || '').trim()               // 'V' | 'E' | 'D' (se jogo)
 
     if (!file) {
       return Response.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 })
@@ -95,39 +100,49 @@ export async function POST(request) {
     }
 
     const csvText = await file.text()
-    const result  = parseGpsCSV(csvText)
+    const result_parse = parseGpsCSV(csvText)
 
-    if (result.error) {
-      return Response.json({ error: result.error }, { status: 422 })
+    if (result_parse.error) {
+      return Response.json({ error: result_parse.error }, { status: 422 })
     }
 
-    const { sessionDate, rows } = result
-
-    // Nome da sessão: campo enviado pelo usuário ou nome do arquivo sem extensão
+    const { sessionDate, rows } = result_parse
     const name = sessionName || file.name.replace(/\.csv$/i, '')
+
+    // Metadados em JSON
+    const metadata = {
+      type: sessionType,
+      period: sessionPeriod || null,
+      opponent: opponent || null,
+      result: result || null,
+    }
 
     // Upsert — se (data + nome) já existe, atualiza
     await sql`
-      INSERT INTO gps_sessions (session_date, session_name, filename, rows)
-      VALUES (${sessionDate}, ${name}, ${file.name}, ${JSON.stringify(rows)})
+      INSERT INTO gps_sessions (session_date, session_name, filename, rows, metadata)
+      VALUES (${sessionDate}, ${name}, ${file.name}, ${JSON.stringify(rows)}, ${JSON.stringify(metadata)})
       ON CONFLICT (session_date, session_name)
       DO UPDATE SET
         filename    = EXCLUDED.filename,
         rows        = EXCLUDED.rows,
+        metadata    = EXCLUDED.metadata,
         uploaded_at = NOW()
     `
 
     const playersCount  = [...new Set(rows.filter(r => r.periodNumber === 0 && !r.isOutlier).map(r => r.playerName))].length
     const outliersCount = rows.filter(r => r.isOutlier && r.periodNumber === 0).length
+    const typeLabel = sessionType === 'jogo' ? `Jogo${opponent ? ` vs ${opponent}` : ''}` : 'Treino'
 
     return Response.json({
       success: true,
       sessionDate,
       sessionName: name,
+      sessionType,
+      sessionPeriod,
       filename: file.name,
       playersCount,
       outliersCount,
-      message: `"${name}" (${sessionDate}) salva com ${playersCount} atletas.${outliersCount > 0 ? ` ${outliersCount} outlier(s) ignorado(s).` : ''}`,
+      message: `"${name}" (${sessionDate}) — ${typeLabel} · ${playersCount} atletas.${outliersCount > 0 ? ` ${outliersCount} outlier(s).` : ''}`,
     })
 
   } catch (err) {
