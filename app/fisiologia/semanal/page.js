@@ -76,9 +76,15 @@ export default function SemanalDashboard() {
   // Dados GPS da semana
   const weekGps = useMemo(() => {
     return gpsData.filter(s => {
-      const [d, m, y] = (s.date || '').split('/')
-      if (!d) return false
-      const dt = new Date(`${y}-${m}-${d}`)
+      const dateStr = s.date || ''
+      let dt
+      if (dateStr.includes('-')) {
+        dt = new Date(dateStr + 'T12:00:00')
+      } else {
+        const [d, m, y] = dateStr.split('/')
+        if (!d || !m || !y) return false
+        dt = new Date(`${y}-${m}-${d}T12:00:00`)
+      }
       return dt >= monday && dt <= sunday
     })
   }, [gpsData, monday, sunday])
