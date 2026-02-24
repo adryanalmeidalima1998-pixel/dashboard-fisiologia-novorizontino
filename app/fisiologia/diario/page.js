@@ -179,14 +179,9 @@ export default function DiarioDashboard() {
   // Sessões GPS do dia selecionado (pode haver mais de uma)
   const gpsDaySessions = useMemo(() => {
     if (!activeGpsSession) return []
-    // activeGpsSession é a sessão selecionada pelo seletor de data
-    // Mas agora podemos ter múltiplas sessões na mesma data
     const dayDate = activeGpsSession.date
     return gpsData.filter(s => s.date === dayDate)
   }, [gpsData, activeGpsSession])
-
-  // Sessão individual selecionada (para detalhe) — null = mostrar soma
-  const [selectedSessionId, setSelectedSessionId] = useState(null)
 
   // GPS por atleta: soma de todas as sessões do dia OU sessão individual
   const gpsMap = useMemo(() => {
@@ -203,7 +198,6 @@ export default function DiarioDashboard() {
         if (!map[name]) {
           map[name] = { ...row, _sessionCount: 1 }
         } else {
-          // Soma métricas acumulativas
           map[name].totalDistance    = (map[name].totalDistance    || 0) + (row.totalDistance    || 0)
           map[name].hsr              = (map[name].hsr              || 0) + (row.hsr              || 0)
           map[name].sprintDistance   = (map[name].sprintDistance   || 0) + (row.sprintDistance   || 0)
@@ -212,10 +206,8 @@ export default function DiarioDashboard() {
           map[name].deceleration     = (map[name].deceleration     || 0) + (row.deceleration     || 0)
           map[name].playerLoad       = (map[name].playerLoad       || 0) + (row.playerLoad       || 0)
           map[name].durationMin      = (map[name].durationMin      || 0) + (row.durationMin      || 0)
-          // Distância relativa: recalcular pela duração total
           const totalDuration = map[name].durationMin
           map[name].distanceRelative = totalDuration > 0 ? map[name].totalDistance / totalDuration : 0
-          // Vmax: manter o maior
           map[name].maxVelocity = Math.max(map[name].maxVelocity || 0, row.maxVelocity || 0)
           map[name]._sessionCount += 1
         }
@@ -296,7 +288,6 @@ export default function DiarioDashboard() {
 
         {/* CONTROLES */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Seletor de data do bem-estar */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Bem-estar:</span>
             <select
@@ -316,7 +307,6 @@ export default function DiarioDashboard() {
             </button>
           </div>
 
-          {/* Seletor de sessão GPS */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">GPS:</span>
             {gpsDates.length > 0 ? (
@@ -333,7 +323,6 @@ export default function DiarioDashboard() {
                 <input type="file" accept=".csv" className="hidden" onChange={e => handleFileUpload(e.target.files[0])} />
               </label>
             )}
-            {/* Seletor de sessão individual quando há múltiplas no dia */}
             {gpsDaySessions.length > 1 && (
               <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
                 <span className="text-[9px] font-black uppercase tracking-widest text-amber-700">Ver:</span>
@@ -356,7 +345,6 @@ export default function DiarioDashboard() {
             )}
           </div>
 
-          {/* Filtro */}
           <button
             onClick={() => setFilterAlert(!filterAlert)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filterAlert ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-red-100 hover:text-red-600'}`}
