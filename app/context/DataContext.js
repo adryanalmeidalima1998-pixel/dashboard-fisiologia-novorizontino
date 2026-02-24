@@ -279,6 +279,30 @@ export function DataProvider({ children }) {
     }
   }, [])
 
+  // ── Deletar múltiplas sessões GPS ─────────────────────────────────────────
+  const bulkDeleteGpsSessions = useCallback(async (ids) => {
+    try {
+      const res = await fetch('/api/gps/sessions/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Erro ao excluir sessões.' }
+      }
+      setGpsData(prev => {
+        const next = prev.filter(s => !ids.includes(s.id))
+        setVmaxBaseline(calcVmaxBaseline(next))
+        return next
+      })
+      return { success: true, deleted: data.deleted }
+    } catch (e) {
+      console.error('Erro ao deletar sessões em lote:', e)
+      return { success: false, error: 'Falha de rede.' }
+    }
+  }, [])
+
   // ── Bem-estar do Google Sheets ────────────────────────────────────────────
   const fetchBemEstar = useCallback(async () => {
     setIsLoadingBemEstar(true)
@@ -339,6 +363,7 @@ export function DataProvider({ children }) {
       uploadGpsFile,
       uploadMultipleGpsFiles,
       deleteGpsSession,
+      bulkDeleteGpsSessions,
       fetchGpsSessions,
       bemEstarData,
       isLoadingBemEstar,
