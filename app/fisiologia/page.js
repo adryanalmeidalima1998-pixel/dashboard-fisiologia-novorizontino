@@ -1,8 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useData } from '../context/DataContext'
-import { useEffect, useState, useRef } from 'react'
+import { useData, suggestNameMatches, normalizeName } from '../context/DataContext'
+import { useEffect, useState, useMemo } from 'react'
 
 const PERIOD_LABELS = { manha: '🌅 Manhã', tarde: '☀️ Tarde', noite: '🌙 Noite' }
 const RESULT_LABELS = { V: '✅ Vitória', E: '🟡 Empate', D: '❌ Derrota' }
@@ -14,14 +14,20 @@ export default function Fisiologia() {
   const {
     gpsData, isLoadingGps, uploadStatus, uploadQueue, uploadGpsFile, uploadMultipleGpsFiles, deleteGpsSession, bulkDeleteGpsSessions,
     bemEstarData, isLoadingBemEstar, fetchBemEstar,
+    nameAliases, isLoadingAliases, addNameAlias, removeNameAlias,
   } = useData()
   const [dragOver, setDragOver] = useState(false)
   const [showCsvManager, setShowCsvManager] = useState(false)
+  const [showAliasManager, setShowAliasManager] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [aliasLoading, setAliasLoading] = useState(new Set())
+  const [aliasError, setAliasError] = useState(null)
+  const [manualGps, setManualGps] = useState('')
+  const [manualBem, setManualBem] = useState('')
   // pendingFiles: array de { file, name, meta: { sessionType, sessionPeriod, opponent, result } }
   const [pendingFiles, setPendingFiles] = useState([])
   const [editingIdx, setEditingIdx] = useState(null)
@@ -29,6 +35,30 @@ export default function Fisiologia() {
   useEffect(() => {
     if (bemEstarData.length === 0) fetchBemEstar()
   }, [])
+
+  // Nomes únicos GPS vs bem-estar para detectar divergências
+  const gpsNames = useMemo(() => {
+    const names = new Set()
+    for (const s of gpsData) for (const r of s.rows) if (r.playerName) names.add(r.playerName)
+    return Array.from(names).sort()
+  }, [gpsData])
+
+  const bemNames = useMemo(() => {
+    return [...new Set(bemEstarData.map(r => r.playerName).filter(Boolean))].sort()
+  }, [bemEstarData])
+
+  // Nomes GPS que não têm correspondência exata no bem-estar (potencialmente duplicados)
+  const unmatchedGpsNames = useMemo(() => {
+    const bemNormed = new Set(bemNames.map(n => normalizeName(n)))
+    const aliasedGps = new Set(nameAliases.map(a => a.gps_name))
+    return gpsNames.filter(n => !bemNormed.has(normalizeName(n)) && !aliasedGps.has(n))
+  }, [gpsNames, bemNames, nameAliases])
+
+  // Sugestões automáticas de matches
+  const suggestions = useMemo(() => {
+    if (!gpsNames.length || !bemNames.length) return []
+    return suggestNameMatches(gpsNames, bemNames, nameAliases)
+  }, [gpsNames, bemNames, nameAliases])
 
   function handleFilesSelect(files) {
     if (!files || files.length === 0) return
@@ -301,6 +331,29 @@ export default function Fisiologia() {
             )}
           </div>
         </div>
+
+        {/* ALERTA DE NOMES DIVERGENTES */}
+        {(suggestions.length > 0 || unmatchedGpsNames.length > 0) && gpsData.length > 0 && bemEstarData.length > 0 && (
+          <div className="border-2 border-amber-400 bg-amber-50 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <div>
+                <p className="text-sm font-black text-amber-900">Nomes divergentes detectados</p>
+                <p className="text-xs text-amber-700 font-medium mt-0.5">
+                  {suggestions.length > 0 && `${suggestions.length} match(es) sugerido(s) automaticamente · `}
+                  {unmatchedGpsNames.length > 0 && `${unmatchedGpsNames.length} nome(s) GPS sem equivalente no bem-estar`}
+                  {nameAliases.length > 0 && ` · ${nameAliases.length} alias(es) ativo(s)`}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowAliasManager(true)}
+              className="shrink-0 bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+            >
+              🔗 Resolver nomes
+            </button>
+          </div>
+        )}
 
         {/* MODAL DE UPLOAD COM METADADOS */}
         {pendingFiles.length > 0 && (
@@ -593,6 +646,162 @@ export default function Fisiologia() {
                 </label>
                 <button onClick={() => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null); setSelectedIds(new Set()) }}
                   className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL RESOLVER NOMES DIVERGENTES */}
+        {showAliasManager && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col">
+              <div className="flex justify-between items-center mb-1">
+                <h3 className="text-base font-black uppercase tracking-tighter text-black">Resolver Nomes Divergentes</h3>
+                <button onClick={() => { setShowAliasManager(false); setAliasError(null); setManualGps(''); setManualBem('') }} className="text-slate-400 hover:text-slate-700 font-black text-xl leading-none">✕</button>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">Vincule nomes do GPS (Catapult) com o nome correspondente no Bem-Estar. O sistema vai cruzar os dados automaticamente.</p>
+
+              {aliasError && (
+                <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-between">
+                  <span>❌ {aliasError}</span>
+                  <button onClick={() => setAliasError(null)} className="ml-2 font-black">✕</button>
+                </div>
+              )}
+
+              <div className="overflow-y-auto flex-1 flex flex-col gap-5">
+
+                {/* SUGESTÕES AUTOMÁTICAS */}
+                {suggestions.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">✨ Sugestões automáticas — clique para confirmar</p>
+                    <div className="flex flex-col gap-2">
+                      {suggestions.map((s, i) => {
+                        const isLoading = aliasLoading.has(s.gpsName)
+                        return (
+                          <div key={i} className="flex items-center gap-2 border border-amber-200 bg-amber-50 rounded-xl px-3 py-2.5">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-black text-slate-700 bg-blue-100 px-2 py-0.5 rounded">📡 {s.gpsName}</span>
+                                <span className="text-slate-400 text-xs">→</span>
+                                <span className="text-xs font-black text-slate-700 bg-green-100 px-2 py-0.5 rounded">📋 {s.bemName}</span>
+                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${s.confidence > 0.7 ? 'bg-green-200 text-green-800' : 'bg-amber-200 text-amber-800'}`}>
+                                  {Math.round(s.confidence * 100)}% similar
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              disabled={isLoading}
+                              onClick={async () => {
+                                setAliasLoading(prev => new Set(prev).add(s.gpsName))
+                                const result = await addNameAlias(s.gpsName, s.bemName)
+                                setAliasLoading(prev => { const n = new Set(prev); n.delete(s.gpsName); return n })
+                                if (!result?.success) setAliasError(result?.error || 'Erro ao salvar alias.')
+                              }}
+                              className="shrink-0 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all disabled:opacity-50 flex items-center gap-1"
+                            >
+                              {isLoading ? <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : '✓'}
+                              {isLoading ? '' : 'Confirmar'}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ALIASES ATIVOS */}
+                {nameAliases.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">✅ Vínculos ativos ({nameAliases.length})</p>
+                    <div className="flex flex-col gap-1.5">
+                      {nameAliases.map(alias => (
+                        <div key={alias.id} className="flex items-center gap-2 border border-green-200 bg-green-50 rounded-xl px-3 py-2">
+                          <div className="flex-1 flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="text-xs font-black text-slate-700 bg-blue-100 px-2 py-0.5 rounded truncate">📡 {alias.gps_name}</span>
+                            <span className="text-slate-400 text-xs shrink-0">→</span>
+                            <span className="text-xs font-black text-slate-700 bg-green-100 px-2 py-0.5 rounded truncate">📋 {alias.bem_name}</span>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              const result = await removeNameAlias(alias.id)
+                              if (!result?.success) setAliasError('Erro ao remover vínculo.')
+                            }}
+                            className="shrink-0 text-red-400 hover:text-red-600 font-black text-xs px-2 py-1 rounded hover:bg-red-50 transition-all"
+                          >✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* NOMES GPS SEM MATCH */}
+                {unmatchedGpsNames.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">📡 Nomes GPS sem correspondência no bem-estar</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {unmatchedGpsNames.map(n => (
+                        <button key={n}
+                          onClick={() => setManualGps(n)}
+                          className={`text-[10px] font-black px-2 py-1 rounded border transition-all ${manualGps === n ? 'bg-blue-500 text-white border-blue-500' : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'}`}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* VÍNCULO MANUAL */}
+                <div className="border-2 border-slate-200 rounded-xl p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">🔗 Criar vínculo manual</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Nome GPS (Catapult) 📡</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: FELIPE SAMOGIM"
+                        value={manualGps}
+                        onChange={e => setManualGps(e.target.value.toUpperCase())}
+                        list="gps-names-list"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold bg-white focus:border-amber-400 focus:outline-none uppercase"
+                      />
+                      <datalist id="gps-names-list">{gpsNames.map(n => <option key={n} value={n}/>)}</datalist>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Nome Bem-Estar (Formulário) 📋</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: FELIPE AGUIAR SAMOGIM"
+                        value={manualBem}
+                        onChange={e => setManualBem(e.target.value.toUpperCase())}
+                        list="bem-names-list"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold bg-white focus:border-amber-400 focus:outline-none uppercase"
+                      />
+                      <datalist id="bem-names-list">{bemNames.map(n => <option key={n} value={n}/>)}</datalist>
+                    </div>
+                  </div>
+                  <button
+                    disabled={!manualGps.trim() || !manualBem.trim()}
+                    onClick={async () => {
+                      setAliasError(null)
+                      const result = await addNameAlias(manualGps.trim(), manualBem.trim())
+                      if (result?.success) { setManualGps(''); setManualBem('') }
+                      else setAliasError(result?.error || 'Erro ao salvar.')
+                    }}
+                    className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    + Criar vínculo
+                  </button>
+                </div>
+
+              </div>
+
+              <div className="flex justify-end mt-4 pt-4 border-t border-slate-100">
+                <button
+                  onClick={() => { setShowAliasManager(false); setAliasError(null); setManualGps(''); setManualBem('') }}
+                  className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                >
                   Fechar
                 </button>
               </div>
