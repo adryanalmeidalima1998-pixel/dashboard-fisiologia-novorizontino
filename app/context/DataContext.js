@@ -75,13 +75,12 @@ export function calcVmaxPct(sessionVmax, historicalMax) {
 
 // ─── PROVIDER ─────────────────────────────────────────────────────────────────
 export function DataProvider({ children }) {
-  // GPS vem do banco via API
   const [gpsData, setGpsData] = useState([])
   const [isLoadingGps, setIsLoadingGps] = useState(false)
   const [gpsError, setGpsError] = useState(null)
-  const [uploadStatus, setUploadStatus] = useState(null) // { type, message }
+  const [uploadStatus, setUploadStatus] = useState(null)
+  const [uploadQueue, setUploadQueue] = useState([]) // { file, name, status }
 
-  // Bem-estar vem do Google Sheets
   const [bemEstarData, setBemEstarData] = useState([])
   const [isLoadingBemEstar, setIsLoadingBemEstar] = useState(false)
   const [bemEstarError, setBemEstarError] = useState(null)
@@ -90,7 +89,7 @@ export function DataProvider({ children }) {
 
   const SHEETS_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS-cmQfBRf3_LpTHaqJmmolqENeue_-egKq6xpPvvW3bFWxqfZF9HbidZdWIqrKWT12-6Zf7BqQ4GSV/pub?gid=0&single=true&output=csv'
 
-  // ── Carregar sessões GPS do banco ao iniciar ──────────────────────────────
+  // ── Carregar sessões GPS ──────────────────────────────────────────────────
   const fetchGpsSessions = useCallback(async () => {
     setIsLoadingGps(true)
     setGpsError(null)
@@ -111,7 +110,7 @@ export function DataProvider({ children }) {
     fetchGpsSessions()
   }, [fetchGpsSessions])
 
-  // ── Upload de CSV GPS → API → banco ───────────────────────────────────────
+  // ── Upload de UM CSV GPS ──────────────────────────────────────────────────
   const uploadGpsFile = useCallback(async (file, sessionName = '') => {
     if (!file || !file.name.endsWith('.csv')) {
       setUploadStatus({ type: 'error', message: 'Selecione um arquivo .csv do Catapult.' })
@@ -144,7 +143,46 @@ export function DataProvider({ children }) {
     }
   }, [fetchGpsSessions])
 
-  // ── Deletar sessão GPS ─────────────────────────────────────────────────────
+  // ── Upload de MÚLTIPLOS CSVs GPS (sequencial) ─────────────────────────────
+  const uploadMultipleGpsFiles = useCallback(async (files) => {
+    if (!files || files.length === 0) return
+
+    const fileArray = Array.from(files)
+    const queue = fileArray.map(f => ({
+      file: f,
+      name: f.name.replace(/\.csv$/i, ''),
+      status: 'pending', // pending | uploading | success | error
+      message: '',
+    }))
+    setUploadQueue(queue)
+
+    for (let i = 0; i < queue.length; i++) {
+      const item = queue[i]
+      setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'uploading' } : q))
+
+      const formData = new FormData()
+      formData.append('file', item.file)
+      formData.append('session_name', item.name)
+
+      try {
+        const res = await fetch('/api/gps/upload', { method: 'POST', body: formData })
+        const data = await res.json()
+
+        if (!res.ok || data.error) {
+          setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'error', message: data.error || 'Erro' } : q))
+        } else {
+          setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'success', message: data.message } : q))
+        }
+      } catch (e) {
+        setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'error', message: 'Falha na conexão' } : q))
+      }
+    }
+
+    await fetchGpsSessions()
+    setTimeout(() => setUploadQueue([]), 8000)
+  }, [fetchGpsSessions])
+
+  // ── Deletar sessão GPS ────────────────────────────────────────────────────
   const deleteGpsSession = useCallback(async (id) => {
     try {
       const res = await fetch(`/api/gps/sessions/${id}`, { method: 'DELETE' })
@@ -172,20 +210,19 @@ export function DataProvider({ children }) {
 
   return (
     <DataContext.Provider value={{
-      // GPS
       gpsData,
       isLoadingGps,
       gpsError,
       uploadStatus,
+      uploadQueue,
       uploadGpsFile,
+      uploadMultipleGpsFiles,
       deleteGpsSession,
       fetchGpsSessions,
-      // Bem-estar
       bemEstarData,
       isLoadingBemEstar,
       bemEstarError,
       fetchBemEstar,
-      // Calculados
       vmaxBaseline,
     }}>
       {children}
