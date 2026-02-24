@@ -5,17 +5,61 @@ import Papa from 'papaparse'
 
 const DataContext = createContext(null)
 
+// ─── NORMALIZAÇÃO DE NOMES ────────────────────────────────────────────────────
+// Remove acentos, padroniza maiúsculas, espaços duplos e preposições
+// para que "João Da Silva" == "JOAO DA SILVA" == "Joao da Silva"
+export function normalizeName(name) {
+  if (!name) return ''
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // remove acentos
+    .replace(/[^a-zA-Z\s]/g, '')      // remove caracteres especiais
+    .replace(/\s+/g, ' ')             // espaços duplos
+    .trim()
+    .toLowerCase()
+}
+
+// Mapa de nome normalizado → nome canônico (primeiro que aparece)
+// Permite cruzar GPS com bem-estar mesmo com nomes diferentes
+let _canonicalMap = {}
+
+export function buildCanonicalMap(gpsData, bemEstarData) {
+  const map = {}
+  // GPS: nome original → normalizado
+  for (const session of gpsData) {
+    for (const row of session.rows) {
+      const orig = row.playerName?.trim()
+      if (!orig) continue
+      const norm = normalizeName(orig)
+      if (!map[norm]) map[norm] = orig // primeiro GPS vira canônico
+    }
+  }
+  // Bem-estar: se nome normalizado já existe, registra equivalência
+  for (const r of bemEstarData) {
+    const orig = r.playerName?.trim()
+    if (!orig) continue
+    const norm = normalizeName(orig)
+    if (!map[norm]) map[norm] = orig
+  }
+  _canonicalMap = map
+  return map
+}
+
+// Retorna o nome canônico para qualquer variação
+export function getCanonicalName(name) {
+  if (!name) return name
+  const norm = normalizeName(name)
+  return _canonicalMap[norm] || name
+}
+
 // ─── BEM-ESTAR PARSER (client-side, Google Sheets) ────────────────────────────
 export function parseBemEstarCSV(csvText) {
   const { data } = Papa.parse(csvText, { header: true, skipEmptyLines: true })
 
   return data.map(row => {
-    // Google Sheets publica datas em formato BR: "29/08/2025 07:30:51"
-    // new Date() não entende esse formato, precisa converter para ISO
     const rawTs = row['Carimbo de data/hora'] || ''
     let timestamp
     if (rawTs.match(/^\d{2}\/\d{2}\/\d{4}/)) {
-      // Formato BR: DD/MM/YYYY HH:MM:SS
       const [datePart, timePart = '00:00:00'] = rawTs.split(' ')
       const [dd, mm, yyyy] = datePart.split('/')
       timestamp = new Date(`${yyyy}-${mm}-${dd}T${timePart}`)
@@ -51,10 +95,13 @@ export function parseBemEstarCSV(csvText) {
       ? wellnessItems.reduce((a, b) => a + b, 0) / wellnessItems.length
       : null
 
+    const rawName = row['Atleta:']?.trim()
+
     return {
       timestamp,
       date,
-      playerName: row['Atleta:']?.trim(),
+      playerName: rawName,           // mantém original para exibição
+      _normalizedName: normalizeName(rawName),
       type: isPre ? 'pre' : isPost ? 'post' : 'unknown',
       fadiga, sono, doms, estresse, humor, corUrina,
       temDor,
@@ -91,13 +138,14 @@ export function DataProvider({ children }) {
   const [isLoadingGps, setIsLoadingGps] = useState(false)
   const [gpsError, setGpsError] = useState(null)
   const [uploadStatus, setUploadStatus] = useState(null)
-  const [uploadQueue, setUploadQueue] = useState([]) // { file, name, status }
+  const [uploadQueue, setUploadQueue] = useState([])
 
   const [bemEstarData, setBemEstarData] = useState([])
   const [isLoadingBemEstar, setIsLoadingBemEstar] = useState(false)
   const [bemEstarError, setBemEstarError] = useState(null)
 
   const [vmaxBaseline, setVmaxBaseline] = useState({})
+  const [canonicalMap, setCanonicalMap] = useState({})
 
   const SHEETS_URL = '/api/bem-estar'
 
@@ -122,8 +170,16 @@ export function DataProvider({ children }) {
     fetchGpsSessions()
   }, [fetchGpsSessions])
 
+  // Recalcula mapa canônico quando ambas as fontes estão disponíveis
+  useEffect(() => {
+    if (gpsData.length > 0 || bemEstarData.length > 0) {
+      const map = buildCanonicalMap(gpsData, bemEstarData)
+      setCanonicalMap(map)
+    }
+  }, [gpsData, bemEstarData])
+
   // ── Upload de UM CSV GPS ──────────────────────────────────────────────────
-  const uploadGpsFile = useCallback(async (file, sessionName = '') => {
+  const uploadGpsFile = useCallback(async (file, sessionName = '', metadata = {}) => {
     if (!file || !file.name.endsWith('.csv')) {
       setUploadStatus({ type: 'error', message: 'Selecione um arquivo .csv do Catapult.' })
       return false
@@ -134,6 +190,10 @@ export function DataProvider({ children }) {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('session_name', sessionName || file.name.replace(/\.csv$/i, ''))
+    if (metadata.sessionType) formData.append('session_type', metadata.sessionType)
+    if (metadata.sessionPeriod) formData.append('session_period', metadata.sessionPeriod)
+    if (metadata.opponent) formData.append('opponent', metadata.opponent)
+    if (metadata.result) formData.append('result', metadata.result)
 
     try {
       const res = await fetch('/api/gps/upload', { method: 'POST', body: formData })
@@ -155,15 +215,15 @@ export function DataProvider({ children }) {
     }
   }, [fetchGpsSessions])
 
-  // ── Upload de MÚLTIPLOS CSVs GPS (sequencial) ─────────────────────────────
-  const uploadMultipleGpsFiles = useCallback(async (files) => {
-    if (!files || files.length === 0) return
+  // ── Upload de MÚLTIPLOS CSVs GPS ──────────────────────────────────────────
+  const uploadMultipleGpsFiles = useCallback(async (filesWithMeta) => {
+    if (!filesWithMeta || filesWithMeta.length === 0) return
 
-    const fileArray = Array.from(files)
-    const queue = fileArray.map(f => ({
-      file: f,
-      name: f.name.replace(/\.csv$/i, ''),
-      status: 'pending', // pending | uploading | success | error
+    const queue = filesWithMeta.map(item => ({
+      file: item.file,
+      name: item.name,
+      metadata: item.metadata || {},
+      status: 'pending',
       message: '',
     }))
     setUploadQueue(queue)
@@ -175,6 +235,10 @@ export function DataProvider({ children }) {
       const formData = new FormData()
       formData.append('file', item.file)
       formData.append('session_name', item.name)
+      if (item.metadata.sessionType) formData.append('session_type', item.metadata.sessionType)
+      if (item.metadata.sessionPeriod) formData.append('session_period', item.metadata.sessionPeriod)
+      if (item.metadata.opponent) formData.append('opponent', item.metadata.opponent)
+      if (item.metadata.result) formData.append('result', item.metadata.result)
 
       try {
         const res = await fetch('/api/gps/upload', { method: 'POST', body: formData })
@@ -220,6 +284,40 @@ export function DataProvider({ children }) {
     }
   }, [])
 
+  // ── Busca de bem-estar por nome (com normalização) ────────────────────────
+  // Use esta função em vez de filtrar por playerName diretamente
+  const getBemEstarForAthlete = useCallback((targetName) => {
+    const normTarget = normalizeName(targetName)
+    return bemEstarData.filter(r => normalizeName(r.playerName) === normTarget)
+  }, [bemEstarData])
+
+  // ── Lista de atletas unificada (sem duplicatas por variação de nome) ──────
+  const getUnifiedAthletes = useCallback(() => {
+    const seen = new Set()
+    const result = []
+    // GPS é fonte primária para nome canônico
+    for (const session of gpsData) {
+      for (const row of session.rows) {
+        if (!row.playerName || row.isOutlier) continue
+        const norm = normalizeName(row.playerName)
+        if (!seen.has(norm)) {
+          seen.add(norm)
+          result.push(row.playerName)
+        }
+      }
+    }
+    // Bem-estar: adiciona quem não tem GPS
+    for (const r of bemEstarData) {
+      if (!r.playerName) continue
+      const norm = normalizeName(r.playerName)
+      if (!seen.has(norm)) {
+        seen.add(norm)
+        result.push(r.playerName)
+      }
+    }
+    return result.sort()
+  }, [gpsData, bemEstarData])
+
   return (
     <DataContext.Provider value={{
       gpsData,
@@ -236,6 +334,10 @@ export function DataProvider({ children }) {
       bemEstarError,
       fetchBemEstar,
       vmaxBaseline,
+      canonicalMap,
+      getBemEstarForAthlete,
+      getUnifiedAthletes,
+      normalizeName,
     }}>
       {children}
     </DataContext.Provider>
