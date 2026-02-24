@@ -16,6 +16,7 @@ export default function Fisiologia() {
     bemEstarData, isLoadingBemEstar, fetchBemEstar,
   } = useData()
   const [dragOver, setDragOver] = useState(false)
+  const [showCsvManager, setShowCsvManager] = useState(false)
   // pendingFiles: array de { file, name, meta: { sessionType, sessionPeriod, opponent, result } }
   const [pendingFiles, setPendingFiles] = useState([])
   const [editingIdx, setEditingIdx] = useState(null)
@@ -260,6 +261,14 @@ export default function Fisiologia() {
                   onChange={e => { handleFilesSelect(e.target.files); e.target.value = '' }}
                 />
               </label>
+              {gpsData.length > 0 && (
+                <button
+                  onClick={() => setShowCsvManager(true)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border border-slate-200"
+                >
+                  📂 Gerenciar
+                </button>
+              )}
             </div>
 
             {/* Fila de upload */}
@@ -401,6 +410,93 @@ export default function Fisiologia() {
                   className="px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-amber-500 text-black hover:bg-amber-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {pendingFiles.length === 1 ? 'Salvar Sessão' : `Salvar ${pendingFiles.length} Sessões`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL GERENCIAR CSVs */}
+        {showCsvManager && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h3 className="text-base font-black uppercase tracking-tighter text-black">Sessões GPS Armazenadas</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{gpsData.length} sessão(ões) no banco · Clique em excluir para remover e fazer upload de uma nova</p>
+                </div>
+                <button onClick={() => setShowCsvManager(false)} className="text-slate-400 hover:text-slate-700 font-black text-xl leading-none">✕</button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 flex flex-col gap-2">
+                {gpsData.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400 text-sm">Nenhuma sessão armazenada.</div>
+                ) : (
+                  gpsData.map((session) => {
+                    const meta = session.metadata || {}
+                    const isJogo = meta.type === 'jogo' || meta.sessionType === 'jogo'
+                    const uploadDate = session.uploadedAt ? new Date(session.uploadedAt).toLocaleDateString('pt-BR') : '—'
+                    const athletes = [...new Set((session.rows || []).filter(r => !r.isOutlier && r.periodNumber === 0).map(r => r.playerName))].length
+                    return (
+                      <div key={session.id} className="flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition-colors">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg shrink-0 ${isJogo ? 'bg-green-100' : 'bg-blue-100'}`}>
+                          {isJogo ? '⚽' : '🏃'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-black text-black truncate">{session.name}</p>
+                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              {session.date || '—'}
+                            </span>
+                            {athletes > 0 && (
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">
+                                {athletes} atletas
+                              </span>
+                            )}
+                            {isJogo && meta.opponent && (
+                              <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold">
+                                vs {meta.opponent}
+                              </span>
+                            )}
+                            {isJogo && meta.result && (
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">
+                                {meta.result === 'V' ? '✅ V' : meta.result === 'E' ? '🟡 E' : '❌ D'}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-slate-400">Upload: {uploadDate}</span>
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          <span className="text-[10px] text-slate-400 font-medium mr-3 hidden sm:inline">{session.filename}</span>
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Excluir sessão "${session.name}"? Esta ação não pode ser desfeita.`)) return
+                              await deleteGpsSession(session.id)
+                            }}
+                            className="bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                          >
+                            🗑 Excluir
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-100">
+                <label className="cursor-pointer bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
+                  + Upload novo CSV
+                  <input
+                    type="file"
+                    accept=".csv"
+                    multiple
+                    className="hidden"
+                    onChange={e => { setShowCsvManager(false); handleFilesSelect(e.target.files); e.target.value = '' }}
+                  />
+                </label>
+                <button onClick={() => setShowCsvManager(false)} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                  Fechar
                 </button>
               </div>
             </div>
