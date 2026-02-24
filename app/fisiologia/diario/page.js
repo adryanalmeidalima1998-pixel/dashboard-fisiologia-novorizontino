@@ -1,0 +1,461 @@
+'use client'
+
+import { useRouter } from 'next/navigation'
+import { useState, useMemo } from 'react'
+import { useData, calcVmaxPct } from '../../context/DataContext'
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function scoreColor(score) {
+  if (score === null || score === undefined) return 'bg-slate-100 text-slate-400'
+  if (score >= 3.5) return 'bg-green-100 text-green-700'
+  if (score >= 2.5) return 'bg-amber-100 text-amber-700'
+  return 'bg-red-100 text-red-700'
+}
+
+function scoreDot(score) {
+  if (score === null || score === undefined) return 'bg-slate-300'
+  if (score >= 3.5) return 'bg-green-500'
+  if (score >= 2.5) return 'bg-amber-500'
+  return 'bg-red-500'
+}
+
+function vmaxColor(pct) {
+  if (!pct) return 'text-slate-400'
+  if (pct >= 90) return 'text-green-600'
+  if (pct >= 80) return 'text-amber-600'
+  return 'text-slate-500'
+}
+
+function urinaLabel(val) {
+  const labels = { 1: 'Transparente', 2: 'Amarelo claro', 3: 'Amarelo', 4: 'Âmbar', 5: 'Escura' }
+  return labels[val] || '-'
+}
+function urinaColor(val) {
+  if (val <= 2) return 'bg-green-100 text-green-700'
+  if (val === 3) return 'bg-amber-100 text-amber-700'
+  return 'bg-red-100 text-red-700'
+}
+
+function MetricBadge({ label, value, max = 5, invert = false }) {
+  const pct = value ? value / max : 0
+  const score = invert ? (max + 1 - value) / max : pct
+  const color = score >= 0.7 ? 'text-green-600' : score >= 0.4 ? 'text-amber-600' : 'text-red-600'
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+      <span className={`text-sm font-black ${value ? color : 'text-slate-300'}`}>{value ?? '—'}</span>
+    </div>
+  )
+}
+
+// ─── COMPONENTE CARD DO ATLETA ────────────────────────────────────────────────
+function AthleteCard({ athlete, gpsRow, vmaxBaseline, onDetail }) {
+  const { pre, post } = athlete
+  const ws = pre?.wellnessScore
+  const hasAlert = (ws && ws < 2.5) || pre?.temDor || (pre?.corUrina >= 4)
+  const vmaxPct = gpsRow && vmaxBaseline[athlete.name]
+    ? calcVmaxPct(gpsRow.maxVelocity, vmaxBaseline[athlete.name])
+    : null
+
+  return (
+    <div
+      className={`border-2 rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${hasAlert ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}
+      onClick={() => onDetail(athlete.name)}
+    >
+      {/* Nome + score */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-black uppercase tracking-tighter text-black truncate pr-2">{athlete.name}</p>
+          {hasAlert && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+              <span className="text-[9px] font-black text-red-600 uppercase tracking-wider">Alerta</span>
+            </div>
+          )}
+        </div>
+        <div className={`px-2 py-1 rounded-lg text-sm font-black ${scoreColor(ws)}`}>
+          {ws ? ws.toFixed(1) : '—'}
+        </div>
+      </div>
+
+      {/* Bem-estar indicators */}
+      {pre && (
+        <div className="grid grid-cols-5 gap-1 mb-3 pb-3 border-b border-slate-100">
+          <MetricBadge label="Sono" value={pre.sono} invert={false} />
+          <MetricBadge label="Fadiga" value={pre.fadiga} max={5} invert={true} />
+          <MetricBadge label="DOMS" value={pre.doms} max={5} invert={true} />
+          <MetricBadge label="Estresse" value={pre.estresse} max={5} invert={true} />
+          <MetricBadge label="Humor" value={pre.humor} />
+        </div>
+      )}
+      {!pre && (
+        <div className="text-[10px] text-slate-400 italic mb-3 pb-3 border-b border-slate-100 font-medium">
+          Sem registro de bem-estar hoje
+        </div>
+      )}
+
+      {/* Dor localizada */}
+      {pre?.temDor && pre?.dorLocalizada && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-2 py-1 mb-2">
+          <p className="text-[9px] font-black text-red-600 uppercase tracking-wider mb-0.5">Dor relatada</p>
+          <p className="text-[10px] text-red-700 font-medium leading-relaxed">{pre.dorLocalizada}</p>
+        </div>
+      )}
+
+      {/* Hidratação */}
+      {pre?.corUrina && (
+        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider mb-2 ${urinaColor(pre.corUrina)}`}>
+          💧 {urinaLabel(pre.corUrina)}
+        </div>
+      )}
+
+      {/* GPS */}
+      {gpsRow && !gpsRow.isOutlier ? (
+        <div className="grid grid-cols-4 gap-1 pt-2 border-t border-slate-100">
+          <div className="flex flex-col items-center">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Dist (m)</span>
+            <span className="text-xs font-black text-black">{gpsRow.totalDistance?.toFixed(0) ?? '—'}</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">m/min</span>
+            <span className="text-xs font-black text-black">{gpsRow.distanceRelative?.toFixed(1) ?? '—'}</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">HSR (m)</span>
+            <span className="text-xs font-black text-black">{gpsRow.hsr?.toFixed(0) ?? '—'}</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vmax %</span>
+            <span className={`text-xs font-black ${vmaxColor(vmaxPct)}`}>
+              {vmaxPct ? `${vmaxPct}%` : `${gpsRow.maxVelocity?.toFixed(1)}km/h`}
+            </span>
+          </div>
+        </div>
+      ) : gpsRow?.isOutlier ? (
+        <div className="pt-2 border-t border-slate-100">
+          <span className="text-[9px] font-black text-red-500 uppercase tracking-wider">⚠ Erro de sensor GPS</span>
+        </div>
+      ) : (
+        <div className="pt-2 border-t border-slate-100">
+          <span className="text-[9px] text-slate-400 italic font-medium">Sem GPS nesta sessão</span>
+        </div>
+      )}
+
+      {/* sRPE */}
+      {post && (
+        <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">sRPE</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black text-black">{post.srpe ?? '—'}</span>
+            {post.srpeLoad && (
+              <span className="text-[9px] text-slate-500 font-medium">({post.srpeLoad.toFixed(0)} UA)</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
+export default function DiarioDashboard() {
+  const router = useRouter()
+  const { gpsData, bemEstarData, vmaxBaseline, isLoadingBemEstar, fetchBemEstar, uploadGpsFile } = useData()
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [selectedGpsDate, setSelectedGpsDate] = useState(null)
+  const [selectedSessionId, setSelectedSessionId] = useState(null)
+  const [filterAlert, setFilterAlert] = useState(false)
+
+  // Datas disponíveis no GPS
+  const gpsDates = useMemo(() => gpsData.map(s => s.date).sort().reverse(), [gpsData])
+
+  // Sessão GPS selecionada
+  const activeGpsSession = useMemo(() => {
+    if (gpsData.length === 0) return null
+    const target = selectedGpsDate || gpsDates[0]
+    return gpsData.find(s => s.date === target) || null
+  }, [gpsData, selectedGpsDate, gpsDates])
+
+  // Sessões GPS do dia selecionado (pode haver mais de uma)
+  const gpsDaySessions = useMemo(() => {
+    if (!activeGpsSession) return []
+    // activeGpsSession é a sessão selecionada pelo seletor de data
+    // Mas agora podemos ter múltiplas sessões na mesma data
+    const dayDate = activeGpsSession.date
+    return gpsData.filter(s => s.date === dayDate)
+  }, [gpsData, activeGpsSession])
+
+  // Sessão individual selecionada (para detalhe) — null = mostrar soma
+  const [selectedSessionId, setSelectedSessionId] = useState(null)
+
+  // GPS por atleta: soma de todas as sessões do dia OU sessão individual
+  const gpsMap = useMemo(() => {
+    if (gpsDaySessions.length === 0) return {}
+    const sessionsToUse = selectedSessionId
+      ? gpsDaySessions.filter(s => s.id === selectedSessionId)
+      : gpsDaySessions
+
+    const map = {}
+    for (const session of sessionsToUse) {
+      for (const row of session.rows) {
+        if (row.periodNumber !== 0 || row.isOutlier) continue
+        const name = row.playerName
+        if (!map[name]) {
+          map[name] = { ...row, _sessionCount: 1 }
+        } else {
+          // Soma métricas acumulativas
+          map[name].totalDistance    = (map[name].totalDistance    || 0) + (row.totalDistance    || 0)
+          map[name].hsr              = (map[name].hsr              || 0) + (row.hsr              || 0)
+          map[name].sprintDistance   = (map[name].sprintDistance   || 0) + (row.sprintDistance   || 0)
+          map[name].sprintCount      = (map[name].sprintCount      || 0) + (row.sprintCount      || 0)
+          map[name].acceleration     = (map[name].acceleration     || 0) + (row.acceleration     || 0)
+          map[name].deceleration     = (map[name].deceleration     || 0) + (row.deceleration     || 0)
+          map[name].playerLoad       = (map[name].playerLoad       || 0) + (row.playerLoad       || 0)
+          map[name].durationMin      = (map[name].durationMin      || 0) + (row.durationMin      || 0)
+          // Distância relativa: recalcular pela duração total
+          const totalDuration = map[name].durationMin
+          map[name].distanceRelative = totalDuration > 0 ? map[name].totalDistance / totalDuration : 0
+          // Vmax: manter o maior
+          map[name].maxVelocity = Math.max(map[name].maxVelocity || 0, row.maxVelocity || 0)
+          map[name]._sessionCount += 1
+        }
+      }
+    }
+    return map
+  }, [gpsDaySessions, selectedSessionId])
+
+  // Bem-estar do dia selecionado
+  const todayBemEstar = useMemo(() => {
+    const pre = {}
+    const post = {}
+    for (const r of bemEstarData) {
+      if (r.date !== selectedDate) continue
+      if (r.type === 'pre') pre[r.playerName] = r
+      if (r.type === 'post') post[r.playerName] = r
+    }
+    return { pre, post }
+  }, [bemEstarData, selectedDate])
+
+  // Lista de atletas combinada
+  const athletes = useMemo(() => {
+    const names = new Set([
+      ...Object.keys(todayBemEstar.pre),
+      ...Object.keys(todayBemEstar.post),
+      ...Object.keys(gpsMap),
+    ])
+    return Array.from(names).sort().map(name => ({
+      name,
+      pre: todayBemEstar.pre[name] || null,
+      post: todayBemEstar.post[name] || null,
+    }))
+  }, [todayBemEstar, gpsMap])
+
+  // Alertas
+  const alerts = useMemo(() => {
+    return athletes.filter(a => {
+      const ws = a.pre?.wellnessScore
+      return (ws && ws < 2.5) || a.pre?.temDor || (a.pre?.corUrina >= 4)
+    })
+  }, [athletes])
+
+  const displayed = filterAlert ? alerts : athletes
+
+  // Datas disponíveis no bem-estar
+  const bemEstarDates = useMemo(() => {
+    const dates = [...new Set(bemEstarData.map(r => r.date))].sort().reverse()
+    return dates
+  }, [bemEstarData])
+
+  async function handleFileUpload(file) {
+    if (!file) return
+    await uploadGpsFile(file)
+  }
+
+  return (
+    <div className="min-h-screen bg-white text-black p-4 font-sans">
+      <div className="max-w-[1400px] mx-auto flex flex-col gap-5">
+
+        {/* HEADER */}
+        <header className="flex justify-between items-center border-b-4 border-amber-500 pb-3">
+          <div className="flex items-center gap-4">
+            <img src="/club/escudonovorizontino.png" alt="Escudo" className="h-14 w-auto" />
+            <div>
+              <h1 className="text-2xl font-black tracking-tighter text-black uppercase leading-none">Dashboard Diário</h1>
+              <p className="text-sm font-bold tracking-widest text-slate-600 uppercase">Prontidão & Carga por Atleta</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">
+              ← VOLTAR
+            </button>
+            <div className="bg-amber-500 text-black px-4 py-1 font-black text-sm uppercase italic shadow-md">
+              {new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short' })}
+            </div>
+          </div>
+        </header>
+
+        {/* CONTROLES */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Seletor de data do bem-estar */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Bem-estar:</span>
+            <select
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-black bg-white focus:border-amber-500 focus:outline-none"
+            >
+              {bemEstarDates.length > 0
+                ? bemEstarDates.map(d => (
+                  <option key={d} value={d}>{new Date(d + 'T12:00:00').toLocaleDateString('pt-BR')}</option>
+                ))
+                : <option value={selectedDate}>{selectedDate}</option>
+              }
+            </select>
+            <button onClick={fetchBemEstar} disabled={isLoadingBemEstar} className="bg-slate-100 hover:bg-amber-100 text-slate-600 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all disabled:opacity-50">
+              {isLoadingBemEstar ? '...' : '↻'}
+            </button>
+          </div>
+
+          {/* Seletor de sessão GPS */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">GPS:</span>
+            {gpsDates.length > 0 ? (
+              <select
+                value={selectedGpsDate || gpsDates[0]}
+                onChange={e => { setSelectedGpsDate(e.target.value); setSelectedSessionId(null) }}
+                className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-black bg-white focus:border-amber-500 focus:outline-none"
+              >
+                {gpsDates.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            ) : (
+              <label className="cursor-pointer bg-amber-500 text-black px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-amber-400 transition-all">
+                + Carregar CSV
+                <input type="file" accept=".csv" className="hidden" onChange={e => handleFileUpload(e.target.files[0])} />
+              </label>
+            )}
+            {/* Seletor de sessão individual quando há múltiplas no dia */}
+            {gpsDaySessions.length > 1 && (
+              <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-700">Ver:</span>
+                <button
+                  onClick={() => setSelectedSessionId(null)}
+                  className={`text-[10px] font-black px-2 py-0.5 rounded transition-all ${!selectedSessionId ? 'bg-amber-500 text-black' : 'text-amber-700 hover:bg-amber-100'}`}
+                >
+                  Soma do dia
+                </button>
+                {gpsDaySessions.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedSessionId(s.id)}
+                    className={`text-[10px] font-black px-2 py-0.5 rounded transition-all ${selectedSessionId === s.id ? 'bg-amber-500 text-black' : 'text-amber-700 hover:bg-amber-100'}`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Filtro */}
+          <button
+            onClick={() => setFilterAlert(!filterAlert)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filterAlert ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-red-100 hover:text-red-600'}`}
+          >
+            ⚠ Alertas {alerts.length > 0 && <span className="bg-white/30 px-1.5 rounded-full">{alerts.length}</span>}
+          </button>
+        </div>
+
+        {/* RESUMO DO DIA */}
+        {athletes.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Com dado hoje</p>
+              <p className="text-2xl font-black text-black">{athletes.filter(a => a.pre).length}</p>
+              <p className="text-[10px] text-slate-500">de {athletes.length} atletas</p>
+            </div>
+            <div className={`border rounded-xl p-3 ${alerts.length > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Alertas</p>
+              <p className={`text-2xl font-black ${alerts.length > 0 ? 'text-red-600' : 'text-green-600'}`}>{alerts.length}</p>
+              <p className="text-[10px] text-slate-500">score {'<'} 2.5 ou dor/desidrat.</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Média Bem-Estar</p>
+              <p className="text-2xl font-black text-black">
+                {athletes.filter(a => a.pre?.wellnessScore).length > 0
+                  ? (athletes.filter(a => a.pre?.wellnessScore).reduce((s, a) => s + a.pre.wellnessScore, 0) / athletes.filter(a => a.pre?.wellnessScore).length).toFixed(1)
+                  : '—'
+                }
+              </p>
+              <p className="text-[10px] text-slate-500">escala 1–5</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Sessões GPS</p>
+              <p className="text-2xl font-black text-black">{gpsDaySessions.length}</p>
+              <p className="text-[10px] text-slate-500">
+                {gpsDaySessions.length > 1
+                  ? gpsDaySessions.map(s => s.name).join(' + ')
+                  : gpsDaySessions[0]?.name || '—'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ALERTAS DESTAQUE */}
+        {alerts.length > 0 && (
+          <div className="border-2 border-red-300 bg-red-50 rounded-xl p-4">
+            <p className="text-xs font-black uppercase tracking-widest text-red-600 mb-3">⚠ Atletas que precisam de atenção hoje</p>
+            <div className="flex flex-wrap gap-2">
+              {alerts.map(a => (
+                <div key={a.name} className="bg-white border border-red-200 rounded-lg px-3 py-2">
+                  <p className="text-xs font-black text-red-700">{a.name.split(' ').slice(0, 2).join(' ')}</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {a.pre?.wellnessScore < 2.5 && <span className="text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-black uppercase">Score baixo {a.pre.wellnessScore.toFixed(1)}</span>}
+                    {a.pre?.temDor && <span className="text-[8px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-black uppercase">Dor</span>}
+                    {a.pre?.corUrina >= 4 && <span className="text-[8px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-black uppercase">Desidratação</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* GRID DE ATLETAS */}
+        {displayed.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {displayed.map(athlete => (
+              <AthleteCard
+                key={athlete.name}
+                athlete={athlete}
+                gpsRow={gpsMap[athlete.name] || null}
+                vmaxBaseline={vmaxBaseline}
+                onDetail={name => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(name)}`)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <p className="text-sm font-black text-slate-500 uppercase tracking-widest">Sem dados para esta data</p>
+            <p className="text-xs text-slate-400 mt-1 font-medium">Selecione outra data ou atualize o bem-estar</p>
+          </div>
+        )}
+
+        {/* FOOTER */}
+        <footer className="flex justify-between items-center border-t-2 border-slate-900 pt-3 mt-2">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 bg-amber-500 rounded-full" />
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+              Score bem-estar = média(sono, 6-fadiga, 6-doms, 6-estresse, humor) | Vmax% = sessão / baseline histórico
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-500 font-black italic tracking-tight uppercase">© Fisiologia GN</p>
+        </footer>
+
+      </div>
+    </div>
+  )
+}
