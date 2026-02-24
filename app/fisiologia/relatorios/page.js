@@ -146,21 +146,17 @@ export default function RelatoriosPage() {
   // ─── RECOMENDAÇÕES AUTOMÁTICAS ────────────────────────────────────────────────
   const recommendations = useMemo(() => {
     const recs = []
-    // Checa bem-estar + GPS do dia mais recente
     const today = new Date().toISOString().split('T')[0]
     const latestDate = bemEstarData.length ? [...new Set(bemEstarData.map(r => r.date))].sort().reverse()[0] : null
     if (latestDate) {
       const preToday = bemEstarData.filter(r => r.type === 'pre' && r.date === latestDate)
-      // Atletas com bem-estar baixo
       preToday.filter(r => r.wellnessScore < 2.5).forEach(r => {
         recs.push({ type: 'warning', text: `${r.playerName}: bem-estar ↓ (${r.wellnessScore?.toFixed(1)}) — avaliar reduzir carga mecânica hoje` })
       })
-      // Com dor
       preToday.filter(r => r.temDor && r.dorLocalizada).forEach(r => {
         recs.push({ type: 'info', text: `${r.playerName}: dor localizada relatada (${r.dorLocalizada.split(',')[0]}) — checar com fisioterapia` })
       })
     }
-    // Risco destreino velocidade
     allAthletes.forEach(name => {
       const rows = gpsData.flatMap(s => s.rows.filter(r => r.playerName === name && r.periodNumber === 0 && !r.isOutlier))
         .sort((a,b) => new Date(b.sessionDate?.split('/').reverse().join('-')) - new Date(a.sessionDate?.split('/').reverse().join('-')))
@@ -172,7 +168,6 @@ export default function RelatoriosPage() {
         recs.push({ type: 'velocity', text: `${name}: ${dias !== null ? `${dias} dias` : 'nunca'} sem ≥90% Vmax → inserir 2–4 exposições de alta velocidade` })
       }
     })
-    // ACWR alto esta semana
     semanal.filter(d => d.acwr > 1.5).forEach(d => {
       recs.push({ type: 'danger', text: `${d.name}: ACWR = ${d.acwr.toFixed(2)} (> 1.5) — alto risco de lesão, reduzir carga` })
     })
@@ -424,8 +419,8 @@ export default function RelatoriosPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-3"><p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Atletas semana</p><p className="text-2xl font-black">{semanal.length}</p></div>
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-3"><p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Carga total</p><p className="text-2xl font-black">{semanal.reduce((s,d)=>s+d.weeklyLoad,0).toFixed(0)}</p><p className="text-[10px] text-slate-500">UA (equipe)</p></div>
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-3"><p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">ACWR alto (>1.5)</p><p className="text-2xl font-black text-red-600">{semanal.filter(d => d.acwr > 1.5).length}</p></div>
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3"><p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Monotonia alta (>2)</p><p className="text-2xl font-black text-amber-700">{semanal.filter(d => d.monotony > 2).length}</p></div>
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3"><p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">ACWR alto ({'>'}1.5)</p><p className="text-2xl font-black text-red-600">{semanal.filter(d => d.acwr > 1.5).length}</p></div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3"><p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Monotonia alta ({'>'}2)</p><p className="text-2xl font-black text-amber-700">{semanal.filter(d => d.monotony > 2).length}</p></div>
                 </div>
                 <div className="border border-slate-200 rounded-xl p-4">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Resumo semanal — Carga, monotonia, ACWR e GPS</p>
@@ -476,7 +471,6 @@ export default function RelatoriosPage() {
             </div>
             {individual.gpsRows.length > 0 || individual.wellRows.length > 0 ? (
               <>
-                {/* Cabeçalho do relatório individual */}
                 <div className="bg-slate-900 text-white rounded-xl p-5">
                   <div className="flex justify-between items-center mb-4">
                     <div>
