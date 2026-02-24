@@ -17,6 +17,9 @@ export default function Fisiologia() {
   } = useData()
   const [dragOver, setDragOver] = useState(false)
   const [showCsvManager, setShowCsvManager] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+  const [deleteError, setDeleteError] = useState(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   // pendingFiles: array de { file, name, meta: { sessionType, sessionPeriod, opponent, result } }
   const [pendingFiles, setPendingFiles] = useState([])
   const [editingIdx, setEditingIdx] = useState(null)
@@ -423,10 +426,18 @@ export default function Fisiologia() {
               <div className="flex justify-between items-center mb-4">
                 <div>
                   <h3 className="text-base font-black uppercase tracking-tighter text-black">Sessões GPS Armazenadas</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{gpsData.length} sessão(ões) no banco · Clique em excluir para remover e fazer upload de uma nova</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{gpsData.length} sessão(ões) no banco · Exclua uma sessão para fazer upload de outra no lugar</p>
                 </div>
-                <button onClick={() => setShowCsvManager(false)} className="text-slate-400 hover:text-slate-700 font-black text-xl leading-none">✕</button>
+                <button onClick={() => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null) }} className="text-slate-400 hover:text-slate-700 font-black text-xl leading-none">✕</button>
               </div>
+
+              {/* Erro global */}
+              {deleteError && (
+                <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-between">
+                  <span>❌ {deleteError}</span>
+                  <button onClick={() => setDeleteError(null)} className="text-red-400 hover:text-red-600 font-black ml-2">✕</button>
+                </div>
+              )}
 
               <div className="overflow-y-auto flex-1 flex flex-col gap-2">
                 {gpsData.length === 0 ? (
@@ -437,46 +448,68 @@ export default function Fisiologia() {
                     const isJogo = meta.type === 'jogo' || meta.sessionType === 'jogo'
                     const uploadDate = session.uploadedAt ? new Date(session.uploadedAt).toLocaleDateString('pt-BR') : '—'
                     const athletes = [...new Set((session.rows || []).filter(r => !r.isOutlier && r.periodNumber === 0).map(r => r.playerName))].length
+                    const isDeleting = deletingId === session.id
+                    const isConfirming = confirmDeleteId === session.id
+
                     return (
-                      <div key={session.id} className="flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 hover:bg-slate-50 transition-colors">
+                      <div key={session.id}
+                        className={`flex items-center gap-3 border rounded-xl px-4 py-3 transition-all ${isDeleting ? 'opacity-50 bg-red-50 border-red-200' : isConfirming ? 'border-red-300 bg-red-50' : 'border-slate-200 hover:bg-slate-50'}`}>
                         <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg shrink-0 ${isJogo ? 'bg-green-100' : 'bg-blue-100'}`}>
-                          {isJogo ? '⚽' : '🏃'}
+                          {isDeleting ? (
+                            <svg className="w-4 h-4 animate-spin text-red-500" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                          ) : isJogo ? '⚽' : '🏃'}
                         </div>
+
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-black text-black truncate">{session.name}</p>
                           <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                            <span className="text-[10px] text-slate-500 font-medium">
-                              {session.date || '—'}
-                            </span>
-                            {athletes > 0 && (
-                              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">
-                                {athletes} atletas
-                              </span>
-                            )}
-                            {isJogo && meta.opponent && (
-                              <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold">
-                                vs {meta.opponent}
-                              </span>
-                            )}
-                            {isJogo && meta.result && (
-                              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">
-                                {meta.result === 'V' ? '✅ V' : meta.result === 'E' ? '🟡 E' : '❌ D'}
-                              </span>
-                            )}
+                            <span className="text-[10px] text-slate-500 font-medium">{session.date || '—'}</span>
+                            {athletes > 0 && <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">{athletes} atletas</span>}
+                            {isJogo && meta.opponent && <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold">vs {meta.opponent}</span>}
+                            {isJogo && meta.result && <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">{meta.result === 'V' ? '✅ V' : meta.result === 'E' ? '🟡 E' : '❌ D'}</span>}
                             <span className="text-[10px] text-slate-400">Upload: {uploadDate}</span>
                           </div>
                         </div>
-                        <div className="shrink-0">
-                          <span className="text-[10px] text-slate-400 font-medium mr-3 hidden sm:inline">{session.filename}</span>
-                          <button
-                            onClick={async () => {
-                              if (!confirm(`Excluir sessão "${session.name}"? Esta ação não pode ser desfeita.`)) return
-                              await deleteGpsSession(session.id)
-                            }}
-                            className="bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
-                          >
-                            🗑 Excluir
-                          </button>
+
+                        <div className="shrink-0 flex items-center gap-2">
+                          {isConfirming ? (
+                            <>
+                              <span className="text-[10px] text-red-600 font-black hidden sm:block">Confirmar exclusão?</span>
+                              <button
+                                disabled={isDeleting}
+                              onClick={async () => {
+                                  setDeletingId(session.id)
+                                  setConfirmDeleteId(null)
+                                  setDeleteError(null)
+                                  const result = await deleteGpsSession(session.id)
+                                  setDeletingId(null)
+                                  if (!result?.success) {
+                                    setDeleteError(result?.error || `Erro ao excluir "${session.name}"`)
+                                  }
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                              >
+                                ✓ Sim, excluir
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                              >
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              disabled={isDeleting || !!deletingId}
+                              onClick={() => setConfirmDeleteId(session.id)}
+                              className="bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              🗑 Excluir
+                            </button>
+                          )}
                         </div>
                       </div>
                     )
@@ -492,10 +525,10 @@ export default function Fisiologia() {
                     accept=".csv"
                     multiple
                     className="hidden"
-                    onChange={e => { setShowCsvManager(false); handleFilesSelect(e.target.files); e.target.value = '' }}
+                    onChange={e => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null); handleFilesSelect(e.target.files); e.target.value = '' }}
                   />
                 </label>
-                <button onClick={() => setShowCsvManager(false)} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                <button onClick={() => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null) }} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
                   Fechar
                 </button>
               </div>
