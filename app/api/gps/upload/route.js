@@ -72,6 +72,7 @@ function parseGpsCSV(csvText) {
         deceleration:     isOutlier ? null : (parseInt(r['DECELERAÇÃO']) || 0),
         accelDecelAvg:    isOutlier ? null : (parseInt(r['Acel + Decel MÉDIA']) || 0),
         maxVelocity:      isOutlier ? null : (parseFloat(r['VELOCIDADE MÁXIMA km/h']) || 0),
+        positionName:     r['Position Name']?.trim() || null,
         durationMin: durationSec / 60,
         isOutlier,
       }
