@@ -6,35 +6,29 @@ import Papa from 'papaparse'
 const DataContext = createContext(null)
 
 // ─── NORMALIZAÇÃO DE NOMES ────────────────────────────────────────────────────
-// Remove acentos, padroniza maiúsculas, espaços duplos e preposições
-// para que "João Da Silva" == "JOAO DA SILVA" == "Joao da Silva"
 export function normalizeName(name) {
   if (!name) return ''
   return name
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')  // remove acentos
-    .replace(/[^a-zA-Z\s]/g, '')      // remove caracteres especiais
-    .replace(/\s+/g, ' ')             // espaços duplos
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z\s]/g, '')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase()
 }
 
-// Mapa de nome normalizado → nome canônico (primeiro que aparece)
-// Permite cruzar GPS com bem-estar mesmo com nomes diferentes
 let _canonicalMap = {}
 
 export function buildCanonicalMap(gpsData, bemEstarData) {
   const map = {}
-  // GPS: nome original → normalizado
   for (const session of gpsData) {
     for (const row of session.rows) {
       const orig = row.playerName?.trim()
       if (!orig) continue
       const norm = normalizeName(orig)
-      if (!map[norm]) map[norm] = orig // primeiro GPS vira canônico
+      if (!map[norm]) map[norm] = orig
     }
   }
-  // Bem-estar: se nome normalizado já existe, registra equivalência
   for (const r of bemEstarData) {
     const orig = r.playerName?.trim()
     if (!orig) continue
@@ -45,11 +39,52 @@ export function buildCanonicalMap(gpsData, bemEstarData) {
   return map
 }
 
-// Retorna o nome canônico para qualquer variação
 export function getCanonicalName(name) {
   if (!name) return name
   const norm = normalizeName(name)
   return _canonicalMap[norm] || name
+}
+
+// ─── SUGESTÃO AUTOMÁTICA DE ALIASES ──────────────────────────────────────────
+// Compara tokens: "FELIPE SAMOGIM" → ["felipe","samogim"]
+// Se todos os tokens do nome menor estão no maior → provável mesmo atleta
+export function suggestNameMatches(gpsNames, bemNames, existingAliases) {
+  const aliasedGpsNames = new Set(existingAliases.map(a => a.gps_name))
+  const suggestions = []
+
+  for (const gpsName of gpsNames) {
+    if (aliasedGpsNames.has(gpsName)) continue
+    const gpsNorm = normalizeName(gpsName)
+    // skip if already matches a bem-estar name exactly
+    if (bemNames.some(b => normalizeName(b) === gpsNorm)) continue
+
+    const gpsTokens = gpsNorm.split(' ').filter(Boolean)
+
+    for (const bemName of bemNames) {
+      const bemNorm = normalizeName(bemName)
+      if (bemNorm === gpsNorm) continue
+      const bemTokens = bemNorm.split(' ').filter(Boolean)
+
+      const shorter = gpsTokens.length <= bemTokens.length ? gpsTokens : bemTokens
+      const longer  = gpsTokens.length <= bemTokens.length ? bemTokens : gpsTokens
+
+      // All tokens of shorter name must appear in longer name
+      // AND shorter must have at least 2 tokens (avoid false positives)
+      if (shorter.length >= 2 && shorter.every(t => longer.includes(t))) {
+        suggestions.push({
+          gpsName,
+          bemName,
+          confidence: shorter.length / longer.length, // higher = more similar
+        })
+      }
+    }
+  }
+
+  // Sort by confidence desc, deduplicate (keep best match per gpsName)
+  const seen = new Set()
+  return suggestions
+    .sort((a, b) => b.confidence - a.confidence)
+    .filter(s => { if (seen.has(s.gpsName)) return false; seen.add(s.gpsName); return true })
 }
 
 // ─── BEM-ESTAR PARSER (client-side, Google Sheets) ────────────────────────────
@@ -114,6 +149,20 @@ export function parseBemEstarCSV(csvText) {
 }
 
 // ─── CÁLCULOS ─────────────────────────────────────────────────────────────────
+// ─── APLICA ALIASES AOS DADOS GPS ────────────────────────────────────────────
+export function applyAliasesToSessions(sessions, aliases) {
+  if (!aliases || aliases.length === 0) return sessions
+  const aliasMap = {}
+  for (const a of aliases) aliasMap[a.gps_name] = a.bem_name
+  return sessions.map(session => ({
+    ...session,
+    rows: session.rows.map(row => {
+      const mapped = aliasMap[row.playerName]
+      return mapped ? { ...row, playerName: mapped, _originalName: row.playerName } : row
+    }),
+  }))
+}
+
 export function calcVmaxBaseline(gpsData) {
   const baseline = {}
   for (const session of gpsData) {
@@ -146,6 +195,8 @@ export function DataProvider({ children }) {
 
   const [vmaxBaseline, setVmaxBaseline] = useState({})
   const [canonicalMap, setCanonicalMap] = useState({})
+  const [nameAliases, setNameAliases] = useState([]) // [{id, gps_name, bem_name}]
+  const [isLoadingAliases, setIsLoadingAliases] = useState(false)
 
   const SHEETS_URL = '/api/bem-estar'
 
@@ -157,18 +208,66 @@ export function DataProvider({ children }) {
       const res = await fetch('/api/gps/sessions')
       if (!res.ok) throw new Error('Erro ao buscar sessões GPS')
       const { sessions } = await res.json()
-      setGpsData(sessions || [])
-      setVmaxBaseline(calcVmaxBaseline(sessions || []))
+      const processedSessions = applyAliasesToSessions(sessions || [], nameAliases)
+      setGpsData(processedSessions)
+      setVmaxBaseline(calcVmaxBaseline(processedSessions))
     } catch (e) {
       setGpsError(e.message)
     } finally {
       setIsLoadingGps(false)
     }
-  }, [])
+  }, [nameAliases])
 
   useEffect(() => {
     fetchGpsSessions()
   }, [fetchGpsSessions])
+
+  // ── Carregar aliases de nomes ────────────────────────────────────────────
+  const fetchNameAliases = useCallback(async () => {
+    setIsLoadingAliases(true)
+    try {
+      const res = await fetch('/api/name-aliases')
+      if (!res.ok) return
+      const { aliases } = await res.json()
+      setNameAliases(aliases || [])
+    } catch (e) {
+      console.error('Erro ao buscar aliases:', e)
+    } finally {
+      setIsLoadingAliases(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchNameAliases() }, [fetchNameAliases])
+
+  const addNameAlias = useCallback(async (gpsName, bemName) => {
+    try {
+      const res = await fetch('/api/name-aliases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gps_name: gpsName, bem_name: bemName }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { success: false, error: data.error }
+      setNameAliases(prev => {
+        const next = prev.filter(a => a.gps_name !== gpsName)
+        return [...next, data.alias]
+      })
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: 'Falha de rede.' }
+    }
+  }, [])
+
+  const removeNameAlias = useCallback(async (id) => {
+    try {
+      const res = await fetch(\`/api/name-aliases/\${id}\`, { method: 'DELETE' })
+      if (!res.ok) return { success: false }
+      setNameAliases(prev => prev.filter(a => a.id !== id))
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: 'Falha de rede.' }
+    }
+  }, [])
 
   // Recalcula mapa canônico quando ambas as fontes estão disponíveis
   useEffect(() => {
@@ -374,6 +473,13 @@ export function DataProvider({ children }) {
       getBemEstarForAthlete,
       getUnifiedAthletes,
       normalizeName,
+      nameAliases,
+      isLoadingAliases,
+      addNameAlias,
+      removeNameAlias,
+      fetchNameAliases,
+      suggestNameMatches,
+      applyAliasesToSessions,
     }}>
       {children}
     </DataContext.Provider>
