@@ -11,16 +11,14 @@ export default function Fisiologia() {
     bemEstarData, isLoadingBemEstar, fetchBemEstar,
   } = useData()
   const [dragOver, setDragOver] = useState(false)
-  // Modal de upload
-  const [pendingFile, setPendingFile]       = useState(null)   // arquivo aguardando confirmação
-  const [sessionNameInput, setSessionNameInput] = useState('') // nome editável
+  const [pendingFile, setPendingFile]       = useState(null)
+  const [sessionNameInput, setSessionNameInput] = useState('')
   const nameInputRef = useRef(null)
 
   useEffect(() => {
     if (bemEstarData.length === 0) fetchBemEstar()
   }, [])
 
-  // Quando um arquivo é selecionado, abre o modal para confirmar nome
   function handleFileSelect(file) {
     if (!file || !file.name.endsWith('.csv')) return
     const defaultName = file.name.replace(/\.csv$/i, '')
@@ -29,7 +27,6 @@ export default function Fisiologia() {
     setTimeout(() => nameInputRef.current?.focus(), 50)
   }
 
-  // Confirma o upload com o nome definido
   async function confirmUpload() {
     if (!pendingFile) return
     await uploadGpsFile(pendingFile, sessionNameInput.trim())
@@ -41,6 +38,7 @@ export default function Fisiologia() {
     setPendingFile(null)
     setSessionNameInput('')
   }
+
   const ferramentas = [
     {
       id: 'diario',
@@ -146,14 +144,12 @@ export default function Fisiologia() {
               </label>
             </div>
 
-            {/* Feedback de upload */}
             {uploadStatus && !pendingFile && (
               <div className={`mt-2 text-xs font-bold px-2 py-1.5 rounded-lg ${uploadStatus.type === 'success' ? 'bg-green-100 text-green-700' : uploadStatus.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                 {uploadStatus.message}
               </div>
             )}
 
-            {/* Lista de sessões salvas — agrupadas por data */}
             {gpsData.length > 0 && (
               <div className="mt-3 flex flex-col gap-0.5 max-h-40 overflow-y-auto">
                 {Object.entries(
@@ -183,7 +179,7 @@ export default function Fisiologia() {
           </div>
         </div>
 
-        {/* ── MODAL DE NOME DA SESSÃO ── */}
+        {/* MODAL DE NOME DA SESSÃO */}
         {pendingFile && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-md mx-4">
@@ -216,7 +212,6 @@ export default function Fisiologia() {
             </div>
           </div>
         )}
-        </div>
 
         {/* GRID DE FERRAMENTAS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
