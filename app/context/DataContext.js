@@ -94,19 +94,34 @@ export function parseBemEstarCSV(csvText) {
   return data.map(row => {
     const rawTs = row['Carimbo de data/hora'] || ''
     let timestamp
+    let date = null
     if (rawTs.match(/^\d{2}\/\d{2}\/\d{4}/)) {
       const [datePart, timePart = '00:00:00'] = rawTs.split(' ')
       const [dd, mm, yyyy] = datePart.split('/')
+      // Usa a data LOCAL do formulário diretamente (dd/mm/yyyy) em vez de toISOString()
+      // que converte para UTC e pode trocar o dia em respostas noturnas (fuso Brasília UTC-3)
+      date = `${yyyy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`
       timestamp = new Date(`${yyyy}-${mm}-${dd}T${timePart}`)
     } else {
       timestamp = new Date(rawTs)
+      date = !isNaN(timestamp) ? timestamp.toISOString().split('T')[0] : null
     }
-    const date = !isNaN(timestamp) ? timestamp.toISOString().split('T')[0] : null
     if (!date) return null
-    // Normaliza o campo Atividade para tolerar variações de acento, espaço e capitalização
-    const _atividadeNorm = (row['Atividade:'] || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
-    const isPre  = _atividadeNorm.includes('pre-ativ') || _atividadeNorm.startsWith('pre')
-    const isPost = _atividadeNorm.includes('pos-ativ') || _atividadeNorm.includes('post')
+    // Normaliza o campo Atividade: tolera acentos, hífen, espaço e capitalização
+    // ex: "Pós-Atividade", "Pós Atividade", "pos atividade", "POST" -> todos detectados
+    const _atividadeRaw = row['Atividade:'] || ''
+    const _atividadeNorm = _atividadeRaw
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+      .replace(/[-_]/g, ' ')                              // hífen/underscore -> espaço
+      .trim().toLowerCase()
+    const isPre  = _atividadeNorm.includes('pre')
+    const isPost = _atividadeNorm.includes('pos') || _atividadeNorm.includes('post')
+    // Se nenhum dos dois bateu, tenta detectar pelo conteúdo:
+    // sRPE preenchido = Pós-Atividade; Wellness preenchido sem sRPE = Pré-Atividade
+    const _hasSrpe    = !!(row['Percepção Subjetiva de Esforço:'] || '').trim()
+    const _hasWellness = !!(row['Fadiga'] || row['Qualidade do Sono'] || row['Humor'] || '').toString().trim()
+    const _isPre  = isPre  || (!isPost && _hasWellness && !_hasSrpe)
+    const _isPost = isPost || (!isPre  && _hasSrpe)
 
     const fadiga = parseFloat(row['Fadiga']) || null
     const sono = parseFloat(row['Qualidade do Sono']) || null
@@ -139,7 +154,7 @@ export function parseBemEstarCSV(csvText) {
       date,
       playerName: rawName,           // mantém original para exibição
       _normalizedName: normalizeName(rawName),
-      type: isPre ? 'pre' : isPost ? 'post' : 'unknown',
+      type: _isPre ? 'pre' : _isPost ? 'post' : 'unknown',
       fadiga, sono, doms, estresse, humor, corUrina,
       temDor,
       dorLocalizada: temDor ? dorLocalizada : '',
