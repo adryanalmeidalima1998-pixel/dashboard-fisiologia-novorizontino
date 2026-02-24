@@ -103,8 +103,10 @@ export function parseBemEstarCSV(csvText) {
     }
     const date = !isNaN(timestamp) ? timestamp.toISOString().split('T')[0] : null
     if (!date) return null
-    const isPre = row['Atividade:'] === 'Pré-Atividade'
-    const isPost = row['Atividade:'] === 'Pós-Atividade'
+    // Normaliza o campo Atividade para tolerar variações de acento, espaço e capitalização
+    const _atividadeNorm = (row['Atividade:'] || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+    const isPre  = _atividadeNorm.includes('pre-ativ') || _atividadeNorm.startsWith('pre')
+    const isPost = _atividadeNorm.includes('pos-ativ') || _atividadeNorm.includes('post')
 
     const fadiga = parseFloat(row['Fadiga']) || null
     const sono = parseFloat(row['Qualidade do Sono']) || null
