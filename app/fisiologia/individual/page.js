@@ -116,34 +116,46 @@ function SortTh({ label, col, sort, onSort }) {
 }
 
 // ─── RADAR CHART ──────────────────────────────────────────────────────────────
-function PlayerRadarChart({ athleteData, compData, compLabel }) {
-  if (!athleteData) return (
-    <div className="flex items-center justify-center h-48 text-slate-300 text-sm">Sem dados GPS para gerar radar</div>
-  )
-  const metrics = [
-    { key: 'distanceRelative', label: 'm/min', unit: 'm/min' },
-    { key: 'hsr', label: 'HSR', unit: 'm' },
-    { key: 'sprintDistance', label: 'Sprint', unit: 'm' },
-    { key: 'accDecel', label: 'ACC+DEC', unit: '' },
-    { key: 'playerLoad', label: 'Player Load', unit: '' },
-    { key: 'maxVelocity', label: 'Vmax', unit: 'km/h' },
-  ]
-  const radarPoints = metrics.map(m => {
+const RADAR_METRICS = [
+  { key: 'distanceRelative', label: 'm/min', unit: 'm/min' },
+  { key: 'hsr', label: 'HSR', unit: 'm' },
+  { key: 'sprintDistance', label: 'Sprint', unit: 'm' },
+  { key: 'accDecel', label: 'ACC+DEC', unit: '' },
+  { key: 'playerLoad', label: 'Player Load', unit: '' },
+  { key: 'maxVelocity', label: 'Vmax', unit: 'km/h' },
+]
+
+function buildRadarPoints(athleteData, compData, compLabel) {
+  return RADAR_METRICS.map(m => {
     const av = athleteData[m.key] || 0
     const cv = (compData || athleteData)[m.key] || 0
     const maxV = Math.max(av, cv, 0.001)
-    return { subject: m.label, Atleta: parseFloat(((av / maxV) * 100).toFixed(1)), [compLabel]: parseFloat(((cv / maxV) * 100).toFixed(1)), rawA: av, rawC: cv, unit: m.unit }
+    return {
+      subject: m.label,
+      Atleta: parseFloat(((av / maxV) * 100).toFixed(1)),
+      [compLabel]: parseFloat(((cv / maxV) * 100).toFixed(1)),
+      rawA: av, rawC: cv, unit: m.unit
+    }
   })
+}
+
+function SingleRadar({ athleteData, compData, compLabel, compColor = '#94a3b8' }) {
+  if (!athleteData) return (
+    <div className="flex items-center justify-center h-48 text-slate-300 text-sm">Sem dados GPS</div>
+  )
+  const radarPoints = buildRadarPoints(athleteData, compData, compLabel)
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null
     const item = radarPoints.find(d => d.subject === label)
     return (
-      <div className="bg-white border border-slate-200 rounded-lg p-2 text-xs shadow-lg">
+      <div className="bg-white border border-slate-200 rounded-lg p-2 text-xs shadow-lg z-50">
         <p className="font-black text-black mb-1">{label}</p>
         {payload.map(p => (
           <p key={p.name} style={{ color: p.color }} className="font-bold">
-            {p.name}: {p.name === 'Atleta' ? item?.rawA?.toFixed(1) : item?.rawC?.toFixed(1)} {item?.unit}
+            {p.name}: {p.name === 'Atleta'
+              ? `${item?.rawA?.toFixed(1)} ${item?.unit}`
+              : `${item?.rawC?.toFixed(1)} ${item?.unit}`}
           </p>
         ))}
       </div>
@@ -151,17 +163,47 @@ function PlayerRadarChart({ athleteData, compData, compLabel }) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={260}>
       <RadarChart data={radarPoints} margin={{ top: 10, right: 30, bottom: 10, left: 30 }}>
         <PolarGrid stroke="#e2e8f0" />
         <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fontWeight: 'bold', fill: '#64748b' }} />
         <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-        <Radar name={compLabel} dataKey={compLabel} stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.2} strokeWidth={1.5} />
+        <Radar name={compLabel} dataKey={compLabel} stroke={compColor} fill={compColor} fillOpacity={0.2} strokeWidth={1.5} />
         <Radar name="Atleta" dataKey="Atleta" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.35} strokeWidth={2} />
         <RTooltip content={<CustomTooltip />} />
         <Legend wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
       </RadarChart>
     </ResponsiveContainer>
+  )
+}
+
+function PlayerRadarChart({ athleteData, compTeamData, compPosData, athletePosition }) {
+  if (!athleteData) return (
+    <div className="flex items-center justify-center h-48 text-slate-300 text-sm">Sem dados GPS para gerar radar</div>
+  )
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="border border-slate-100 rounded-xl p-3">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 text-center">vs Média da Equipe</p>
+        <SingleRadar athleteData={athleteData} compData={compTeamData} compLabel="Média Equipe" compColor="#94a3b8" />
+        <p className="text-[9px] text-slate-400 text-center mt-1">Valores relativos ao máximo entre atleta e grupo</p>
+      </div>
+      <div className="border border-slate-100 rounded-xl p-3">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 text-center">
+          vs Média da Posição {athletePosition ? <span className="text-amber-600">({athletePosition})</span> : ''}
+        </p>
+        {compPosData
+          ? <SingleRadar athleteData={athleteData} compData={compPosData} compLabel={athletePosition ? `Média ${athletePosition}` : 'Média Posição'} compColor="#6366f1" />
+          : <div className="flex flex-col items-center justify-center h-48 text-slate-300 text-sm gap-2">
+              <span>Posição não identificada</span>
+              {!athletePosition && <span className="text-[10px] text-slate-300">Configure a posição no modal ⚙</span>}
+            </div>
+        }
+        <p className="text-[9px] text-slate-400 text-center mt-1">
+          {compPosData ? 'Comparação com atletas da mesma posição' : 'Carregue sessões com "Position Name" ou configure manualmente'}
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -395,13 +437,14 @@ function AnatomyFigure({ activeRegions, hoveredRegion, onHover }) {
 function IndividualContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { gpsData, bemEstarData, vmaxBaseline } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, playerPositions: ctxPositions } = useData()
   const [activeTab, setActiveTab] = useState('visao')
   const [hoveredRegion, setHoveredRegion] = useState(null)
   const [showPositionConfig, setShowPositionConfig] = useState(false)
-  const [playerPositions, setPlayerPositions] = useState({})
   const [sortGps, setSortGps] = useState({ col: 'sessionDate', dir: 'desc' })
   const [sortBem, setSortBem] = useState({ col: 'date', dir: 'desc' })
+  // Posições: usa as do contexto (CSV) mas permite override manual
+  const [positionOverrides, setPositionOverrides] = useState({})
 
   function toggleSort(current, col, setter) {
     setter(current.col === col ? { col, dir: current.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' })
@@ -435,6 +478,9 @@ function IndividualContent() {
     if (!gpsData.length) return []
     return gpsData[gpsData.length - 1].rows.filter(r => r.playerName === athlete && !r.isOutlier)
   }, [gpsData, athlete])
+
+  // Merge: CSV positions + manual overrides
+  const playerPositions = useMemo(() => ({ ...ctxPositions, ...positionOverrides }), [ctxPositions, positionOverrides])
 
   const vmaxMax = vmaxBaseline[athlete] || null
   const latestGps = gpsHistory[gpsHistory.length - 1] || null
@@ -493,11 +539,8 @@ function IndividualContent() {
     }
   }, [gpsHistory])
 
-  const compData = useMemo(() => {
-    const compareAthletes = athletePosition
-      ? allAthletes.filter(a => a !== athlete && playerPositions[a] === athletePosition)
-      : allAthletes.filter(a => a !== athlete)
-    const rows = gpsData.flatMap(s => s.rows.filter(r => compareAthletes.includes(r.playerName) && r.periodNumber === 0 && !r.isOutlier))
+  const compTeamData = useMemo(() => {
+    const rows = gpsData.flatMap(s => s.rows.filter(r => r.playerName !== athlete && r.periodNumber === 0 && !r.isOutlier))
     if (!rows.length) return null
     const n = rows.length
     return {
@@ -508,9 +551,27 @@ function IndividualContent() {
       playerLoad: rows.reduce((s, r) => s + (r.playerLoad || 0), 0) / n,
       maxVelocity: rows.reduce((s, r) => s + (r.maxVelocity || 0), 0) / n,
     }
-  }, [gpsData, allAthletes, athlete, athletePosition, playerPositions])
+  }, [gpsData, athlete])
 
-  const compLabel = athletePosition ? `Média ${athletePosition}` : 'Média Equipe'
+  const compPosData = useMemo(() => {
+    if (!athletePosition) return null
+    const rows = gpsData.flatMap(s => s.rows.filter(r => {
+      if (r.playerName === athlete || r.periodNumber !== 0 || r.isOutlier) return false
+      // posição vem do CSV ou do playerPositions
+      const pos = r.positionName || playerPositions[r.playerName]
+      return pos === athletePosition
+    }))
+    if (!rows.length) return null
+    const n = rows.length
+    return {
+      distanceRelative: rows.reduce((s, r) => s + (r.distanceRelative || 0), 0) / n,
+      hsr: rows.reduce((s, r) => s + (r.hsr || 0), 0) / n,
+      sprintDistance: rows.reduce((s, r) => s + (r.sprintDistance || 0), 0) / n,
+      accDecel: rows.reduce((s, r) => s + (r.acceleration || 0) + (r.deceleration || 0), 0) / n,
+      playerLoad: rows.reduce((s, r) => s + (r.playerLoad || 0), 0) / n,
+      maxVelocity: rows.reduce((s, r) => s + (r.maxVelocity || 0), 0) / n,
+    }
+  }, [gpsData, athlete, athletePosition, playerPositions])
 
   // ─── SCORES ──────────────────────────────────────────────────────────────────
   const lastWellness = wellinessHistory[wellinessHistory.length - 1]
@@ -592,7 +653,7 @@ function IndividualContent() {
               {allAthletes.map(a => (
                 <div key={a} className="flex items-center gap-3">
                   <span className="text-xs font-bold flex-1 truncate">{a}</span>
-                  <select value={playerPositions[a] || ''} onChange={e => setPlayerPositions(prev => ({ ...prev, [a]: e.target.value }))}
+                  <select value={playerPositions[a] || ''} onChange={e => setPositionOverrides(prev => ({ ...prev, [a]: e.target.value || undefined }))}
                     className="border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold bg-white focus:border-amber-400 focus:outline-none">
                     <option value="">— Posição —</option>
                     {POSICOES.map(p => <option key={p} value={p}>{p}</option>)}
@@ -654,16 +715,16 @@ function IndividualContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Radar */}
           <div className="border border-slate-200 rounded-xl p-4 md:col-span-2">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-                Radar de Métricas Físicas — Atleta vs {compLabel}
+                Radar de Métricas Físicas
               </p>
-              {!compData && <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-1 rounded-lg font-bold">Configure posições para comparar por função</span>}
+              {athletePosition
+                ? <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-1 rounded-lg font-bold uppercase">{athletePosition}</span>
+                : <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-1 rounded-lg font-bold">Configure a posição no ⚙ para ver radar por posição</span>
+              }
             </div>
-            <PlayerRadarChart athleteData={radarData} compData={compData || radarData} compLabel={compLabel} />
-            <p className="text-[9px] text-slate-400 font-medium mt-1 text-center">
-              Valores relativos ao máximo entre atleta e grupo · Médias de todas as sessões GPS carregadas
-            </p>
+            <PlayerRadarChart athleteData={radarData} compTeamData={compTeamData} compPosData={compPosData} athletePosition={athletePosition} />
           </div>
 
           <div className="border border-slate-200 rounded-xl p-4">
