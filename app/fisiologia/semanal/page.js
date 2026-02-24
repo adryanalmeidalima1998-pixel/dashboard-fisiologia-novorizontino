@@ -54,6 +54,39 @@ export default function SemanalDashboard() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [activeTab, setActiveTab] = useState('carga') // 'carga' | 'gps' | 'bemEstar'
 
+  // Semanas disponíveis com dados (para o seletor)
+  const availableWeeks = useMemo(() => {
+    const weeks = new Map()
+    const allDates = [
+      ...bemEstarData.map(r => r.date),
+      ...gpsData.map(s => s.date),
+    ]
+    for (const dateStr of allDates) {
+      if (!dateStr) continue
+      const d = new Date(dateStr + 'T12:00:00')
+      if (isNaN(d)) continue
+      const dow = d.getDay() === 0 ? 6 : d.getDay() - 1
+      const mon = new Date(d)
+      mon.setDate(d.getDate() - dow)
+      mon.setHours(0, 0, 0, 0)
+      const key = isoDate(mon)
+      if (!weeks.has(key)) weeks.set(key, mon)
+    }
+    // Sempre incluir a semana atual
+    const { monday: thisMon } = getWeekBounds(0)
+    weeks.set(isoDate(thisMon), thisMon)
+    return Array.from(weeks.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([key, mon]) => {
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
+        const label = `${mon.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${sun.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
+        return { key, mon, label }
+      })
+  }, [bemEstarData, gpsData])
+
+  // Sincronizar weekOffset com a semana selecionada pelo select
+  const selectedWeekKey = isoDate(getWeekBounds(weekOffset).monday)
+
   const { monday, sunday } = useMemo(() => getWeekBounds(weekOffset), [weekOffset])
   const weekLabel = `${monday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${sunday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
 
@@ -196,10 +229,24 @@ export default function SemanalDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">← VOLTAR</button>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setWeekOffset(w => w - 1)} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">‹</button>
-              <div className="bg-amber-500 text-black px-3 py-1 font-black text-xs uppercase italic shadow-md min-w-[160px] text-center">{weekLabel}</div>
-              <button onClick={() => setWeekOffset(w => Math.min(0, w + 1))} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">›</button>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Semana:</span>
+              <select
+                value={selectedWeekKey}
+                onChange={e => {
+                  const idx = availableWeeks.findIndex(w => w.key === e.target.value)
+                  if (idx === -1) return
+                  const { monday: thisMon } = getWeekBounds(0)
+                  const diffMs = availableWeeks[idx].mon.getTime() - thisMon.getTime()
+                  const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000))
+                  setWeekOffset(diffWeeks)
+                }}
+                className="bg-amber-500 text-black px-3 py-1.5 font-black text-xs uppercase rounded-lg focus:outline-none cursor-pointer"
+              >
+                {availableWeeks.map(w => (
+                  <option key={w.key} value={w.key}>{w.label}</option>
+                ))}
+              </select>
             </div>
           </div>
         </header>
