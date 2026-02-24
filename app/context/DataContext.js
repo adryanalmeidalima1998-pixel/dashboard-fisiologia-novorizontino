@@ -10,8 +10,20 @@ export function parseBemEstarCSV(csvText) {
   const { data } = Papa.parse(csvText, { header: true, skipEmptyLines: true })
 
   return data.map(row => {
-    const timestamp = new Date(row['Carimbo de data/hora'])
-    const date = timestamp.toISOString().split('T')[0]
+    // Google Sheets publica datas em formato BR: "29/08/2025 07:30:51"
+    // new Date() não entende esse formato, precisa converter para ISO
+    const rawTs = row['Carimbo de data/hora'] || ''
+    let timestamp
+    if (rawTs.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+      // Formato BR: DD/MM/YYYY HH:MM:SS
+      const [datePart, timePart = '00:00:00'] = rawTs.split(' ')
+      const [dd, mm, yyyy] = datePart.split('/')
+      timestamp = new Date(`${yyyy}-${mm}-${dd}T${timePart}`)
+    } else {
+      timestamp = new Date(rawTs)
+    }
+    const date = !isNaN(timestamp) ? timestamp.toISOString().split('T')[0] : null
+    if (!date) return null
     const isPre = row['Atividade:'] === 'Pré-Atividade'
     const isPost = row['Atividade:'] === 'Pós-Atividade'
 
@@ -51,7 +63,7 @@ export function parseBemEstarCSV(csvText) {
       srpeLoad: srpe && duracaoSessao ? srpe * duracaoSessao : null,
       wellnessScore,
     }
-  }).filter(r => r.playerName)
+  }).filter(r => r && r.playerName)
 }
 
 // ─── CÁLCULOS ─────────────────────────────────────────────────────────────────
