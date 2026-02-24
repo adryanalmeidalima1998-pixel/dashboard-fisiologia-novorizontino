@@ -28,3 +28,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_gps_sessions_date_name
 -- ALTER TABLE gps_sessions ALTER COLUMN session_name SET NOT NULL;
 -- CREATE UNIQUE INDEX idx_gps_sessions_date_name ON gps_sessions (session_date, session_name);
 -- ============================================================
+
+-- ============================================================
+-- ALIASES DE NOMES (GPS ↔ Bem-Estar)
+-- Roda pelo próprio sistema na primeira chamada (CREATE IF NOT EXISTS)
+-- Mas você pode rodar aqui também para garantir
+-- ============================================================
+CREATE TABLE IF NOT EXISTS name_aliases (
+  id          SERIAL PRIMARY KEY,
+  gps_name    VARCHAR(255) NOT NULL UNIQUE,
+  bem_name    VARCHAR(255) NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
