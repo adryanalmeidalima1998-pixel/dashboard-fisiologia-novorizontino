@@ -4,6 +4,11 @@ import { useRouter } from 'next/navigation'
 import { useData } from '../context/DataContext'
 import { useEffect, useState, useRef } from 'react'
 
+const PERIOD_LABELS = { manha: '🌅 Manhã', tarde: '☀️ Tarde', noite: '🌙 Noite' }
+const RESULT_LABELS = { V: '✅ Vitória', E: '🟡 Empate', D: '❌ Derrota' }
+
+const EMPTY_META = { sessionType: 'treino', sessionPeriod: 'tarde', opponent: '', result: '' }
+
 export default function Fisiologia() {
   const router = useRouter()
   const {
@@ -11,39 +16,37 @@ export default function Fisiologia() {
     bemEstarData, isLoadingBemEstar, fetchBemEstar,
   } = useData()
   const [dragOver, setDragOver] = useState(false)
-  const [pendingFiles, setPendingFiles] = useState([])   // array de { file, name }
+  // pendingFiles: array de { file, name, meta: { sessionType, sessionPeriod, opponent, result } }
+  const [pendingFiles, setPendingFiles] = useState([])
   const [editingIdx, setEditingIdx] = useState(null)
-  const nameInputRef = useRef(null)
 
   useEffect(() => {
     if (bemEstarData.length === 0) fetchBemEstar()
   }, [])
 
-  // Quando arquivos são selecionados, abre modal de confirmação
   function handleFilesSelect(files) {
     if (!files || files.length === 0) return
     const validFiles = Array.from(files).filter(f => f.name.endsWith('.csv'))
     if (validFiles.length === 0) return
-    setPendingFiles(validFiles.map(f => ({ file: f, name: f.name.replace(/\.csv$/i, '') })))
+    setPendingFiles(validFiles.map(f => ({
+      file: f,
+      name: f.name.replace(/\.csv$/i, ''),
+      meta: { ...EMPTY_META },
+    })))
     setEditingIdx(null)
   }
 
   async function confirmUpload() {
     if (pendingFiles.length === 0) return
     if (pendingFiles.length === 1) {
-      await uploadGpsFile(pendingFiles[0].file, pendingFiles[0].name)
+      const p = pendingFiles[0]
+      await uploadGpsFile(p.file, p.name, p.meta)
     } else {
-      const filesWithNames = pendingFiles.map(p => {
-        const dt = new DataTransfer()
-        dt.items.add(p.file)
-        return { file: p.file, name: p.name }
-      })
-      // Usa uploadMultipleGpsFiles mas com nomes personalizados
-      const namedFiles = pendingFiles.map(p => {
-        const renamed = new File([p.file], p.name + '.csv', { type: p.file.type })
-        return renamed
-      })
-      await uploadMultipleGpsFiles(namedFiles)
+      await uploadMultipleGpsFiles(pendingFiles.map(p => ({
+        file: p.file,
+        name: p.name,
+        metadata: p.meta,
+      })))
     }
     setPendingFiles([])
     setEditingIdx(null)
@@ -52,6 +55,17 @@ export default function Fisiologia() {
   function cancelUpload() {
     setPendingFiles([])
     setEditingIdx(null)
+  }
+
+  function updatePending(idx, field, value) {
+    setPendingFiles(prev => prev.map((f, i) => i === idx ? { ...f, [field]: value } : f))
+  }
+
+  function updateMeta(idx, field, value) {
+    setPendingFiles(prev => prev.map((f, i) => i === idx
+      ? { ...f, meta: { ...f.meta, [field]: value } }
+      : f
+    ))
   }
 
   const ferramentas = [
@@ -135,6 +149,34 @@ export default function Fisiologia() {
   ]
 
   const isUploading = uploadQueue.some(q => q.status === 'uploading')
+
+  // Badge visual de tipo/turno da sessão
+  function SessionBadge({ session }) {
+    const meta = session.metadata || {}
+    const isJogo = meta.type === 'jogo'
+    return (
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${isJogo ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+          {isJogo ? '⚽ Jogo' : '🏃 Treino'}
+        </span>
+        {meta.period && (
+          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+            {PERIOD_LABELS[meta.period] || meta.period}
+          </span>
+        )}
+        {isJogo && meta.opponent && (
+          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+            vs {meta.opponent}
+          </span>
+        )}
+        {isJogo && meta.result && (
+          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+            {RESULT_LABELS[meta.result] || meta.result}
+          </span>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-white text-black p-4 font-sans">
@@ -220,7 +262,7 @@ export default function Fisiologia() {
               </label>
             </div>
 
-            {/* Fila de upload múltiplo */}
+            {/* Fila de upload */}
             {uploadQueue.length > 0 && (
               <div className="mt-2 flex flex-col gap-1">
                 {uploadQueue.map((item, i) => (
@@ -240,76 +282,111 @@ export default function Fisiologia() {
               </div>
             )}
 
-            {/* Lista de sessões */}
-            {gpsData.length > 0 && (
-              <div className="mt-3 flex flex-col gap-0.5 max-h-40 overflow-y-auto">
-                {Object.entries(
-                  gpsData.reduce((acc, s) => {
-                    acc[s.date] = acc[s.date] || []
-                    acc[s.date].push(s)
-                    return acc
-                  }, {})
-                ).slice(0, 6).map(([date, sessions]) => (
-                  <div key={date}>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 pt-1.5 pb-0.5">{date}</p>
-                    {sessions.map(s => (
-                      <div key={s.id} className="flex items-center justify-between py-1 pl-2 border-l-2 border-amber-200">
-                        <span className="text-[10px] font-bold text-slate-700 truncate max-w-[200px]">{s.name}</span>
-                        <button onClick={() => deleteGpsSession(s.id)} className="text-[9px] text-red-400 hover:text-red-600 font-black px-1.5 transition-colors ml-2" title="Remover">✕</button>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                {gpsData.length > 6 && <p className="text-[9px] text-slate-400 font-medium pt-1">+{gpsData.length - 6} mais...</p>}
-              </div>
-            )}
-
             {gpsData.length === 0 && !uploadStatus && uploadQueue.length === 0 && (
-              <p className="mt-2 text-[10px] text-slate-400 font-medium">Arraste um ou mais .csv ou clique em "Upload CSV(s)" — você pode selecionar vários de uma vez</p>
+              <p className="mt-2 text-[10px] text-slate-400 font-medium">Arraste um ou mais .csv ou clique em "Upload CSV(s)"</p>
             )}
           </div>
         </div>
 
-        {/* MODAL DE CONFIRMAÇÃO DE ARQUIVOS */}
+        {/* MODAL DE UPLOAD COM METADADOS */}
         {pendingFiles.length > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-lg mx-4">
+            <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
               <h3 className="text-base font-black uppercase tracking-tighter text-black mb-1">
-                {pendingFiles.length === 1 ? 'Nome da Sessão' : `${pendingFiles.length} Sessões para Upload`}
+                {pendingFiles.length === 1 ? 'Configurar Sessão' : `${pendingFiles.length} Sessões para Upload`}
               </h3>
-              <p className="text-xs text-slate-500 font-medium mb-4">
-                {pendingFiles.length === 1
-                  ? 'Edite o nome para identificar esta sessão'
-                  : 'Edite os nomes clicando em cada um. Confirme para enviar todos.'}
+              <p className="text-xs text-slate-500 font-medium mb-5">
+                Defina o nome, tipo (treino ou jogo) e turno de cada sessão antes de salvar.
               </p>
 
-              <div className="flex flex-col gap-2 max-h-64 overflow-y-auto mb-4">
+              <div className="flex flex-col gap-5 mb-5">
                 {pendingFiles.map((p, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400 font-black w-5 text-right">{i + 1}.</span>
-                    {editingIdx === i ? (
-                      <input
-                        autoFocus
-                        type="text"
-                        value={p.name}
-                        onChange={e => setPendingFiles(prev => prev.map((f, idx) => idx === i ? { ...f, name: e.target.value } : f))}
-                        onBlur={() => setEditingIdx(null)}
-                        onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingIdx(null) }}
-                        className="flex-1 border-2 border-amber-400 rounded-lg px-3 py-1.5 text-xs font-bold text-black focus:outline-none"
-                      />
-                    ) : (
+                  <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                    {/* Número + Nome */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-[10px] text-slate-400 font-black w-5 text-right shrink-0">{i + 1}.</span>
+                      {editingIdx === i ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={p.name}
+                          onChange={e => updatePending(i, 'name', e.target.value)}
+                          onBlur={() => setEditingIdx(null)}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setEditingIdx(null) }}
+                          className="flex-1 border-2 border-amber-400 rounded-lg px-3 py-1.5 text-xs font-bold text-black focus:outline-none bg-white"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => setEditingIdx(i)}
+                          className="flex-1 text-left border border-slate-200 hover:border-amber-400 rounded-lg px-3 py-1.5 text-xs font-bold text-black transition-colors bg-white"
+                        >
+                          {p.name}
+                          <span className="ml-2 text-[9px] text-slate-400">✏</span>
+                        </button>
+                      )}
                       <button
-                        onClick={() => setEditingIdx(i)}
-                        className="flex-1 text-left border border-slate-200 hover:border-amber-400 rounded-lg px-3 py-1.5 text-xs font-bold text-black transition-colors"
-                      >
-                        {p.name}
-                        <span className="ml-2 text-[9px] text-slate-400">✏</span>
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
-                      className="text-red-400 hover:text-red-600 font-black text-xs px-1"
-                    >✕</button>
+                        onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-red-400 hover:text-red-600 font-black text-xs px-1 shrink-0"
+                      >✕</button>
+                    </div>
+
+                    {/* Metadados em linha */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {/* Tipo */}
+                      <div>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Tipo</label>
+                        <div className="flex gap-1">
+                          {['treino', 'jogo'].map(t => (
+                            <button key={t} onClick={() => updateMeta(i, 'sessionType', t)}
+                              className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${p.meta.sessionType === t ? (t === 'jogo' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white') : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-400'}`}>
+                              {t === 'treino' ? '🏃 Treino' : '⚽ Jogo'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Turno */}
+                      <div>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Turno</label>
+                        <div className="flex gap-1">
+                          {[['manha', '🌅'], ['tarde', '☀️'], ['noite', '🌙']].map(([val, icon]) => (
+                            <button key={val} onClick={() => updateMeta(i, 'sessionPeriod', val)}
+                              className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-all ${p.meta.sessionPeriod === val ? 'bg-amber-500 text-black' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-400'}`}>
+                              {icon}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Adversário (só se jogo) */}
+                      {p.meta.sessionType === 'jogo' && (
+                        <div>
+                          <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Adversário</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Mirassol"
+                            value={p.meta.opponent}
+                            onChange={e => updateMeta(i, 'opponent', e.target.value)}
+                            className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold bg-white focus:border-amber-400 focus:outline-none"
+                          />
+                        </div>
+                      )}
+
+                      {/* Resultado (só se jogo) */}
+                      {p.meta.sessionType === 'jogo' && (
+                        <div>
+                          <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Resultado</label>
+                          <div className="flex gap-1">
+                            {[['V', '✅'], ['E', '🟡'], ['D', '❌']].map(([val, icon]) => (
+                              <button key={val} onClick={() => updateMeta(i, 'result', p.meta.result === val ? '' : val)}
+                                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-all ${p.meta.result === val ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-400'}`}>
+                                {icon} {val}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
