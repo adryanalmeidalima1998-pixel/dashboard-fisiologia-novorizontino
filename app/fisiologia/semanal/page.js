@@ -65,13 +65,20 @@ const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 export default function SemanalDashboard() {
   const router = useRouter()
-  const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar } = useData()
+  const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions } = useData()
   const [weekOffset, setWeekOffset] = useState(0)
   const [activeTab, setActiveTab] = useState('carga') // 'carga' | 'gps' | 'bemEstar'
+  const [filterPosition, setFilterPosition] = useState('')
   // Ordenação das tabelas: { col, dir }
   const [sortCarga, setSortCarga] = useState({ col: 'total', dir: 'desc' })
   const [sortGps, setSortGps] = useState({ col: 'totalDistance', dir: 'desc' })
   const [sortBem, setSortBem] = useState({ col: 'avg', dir: 'desc' })
+
+  // Posições únicas disponíveis
+  const availablePositions = useMemo(() => {
+    const set = new Set(Object.values(playerPositions).filter(Boolean))
+    return Array.from(set).sort()
+  }, [playerPositions])
 
   // Toggle sort helper
   function toggleSort(current, col, setter) {
@@ -123,8 +130,10 @@ export default function SemanalDashboard() {
       ...weekBemEstar.map(r => r.playerName),
       ...weekGps.flatMap(s => s.rows.filter(r => r.periodNumber === 0 && !r.isOutlier).map(r => r.playerName))
     ])
-    return Array.from(names).sort()
-  }, [weekBemEstar, weekGps])
+    let list = Array.from(names).sort()
+    if (filterPosition) list = list.filter(a => playerPositions[a] === filterPosition)
+    return list
+  }, [weekBemEstar, weekGps, filterPosition, playerPositions])
 
   // sRPE-load por atleta por dia
   const srpeMatrix = useMemo(() => {
@@ -275,8 +284,17 @@ export default function SemanalDashboard() {
               <p className="text-sm font-bold tracking-widest text-slate-600 uppercase">Carga, Monotonia & ACWR</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">← VOLTAR</button>
+            {availablePositions.length > 0 && (
+              <select
+                value={filterPosition}
+                onChange={e => setFilterPosition(e.target.value)}
+                className="border border-slate-200 rounded-lg px-3 py-1 text-xs font-black bg-white text-slate-700 focus:border-amber-400 focus:outline-none">
+                <option value="">Todas as posições</option>
+                {availablePositions.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            )}
             <div className="flex items-center gap-1">
               <button onClick={() => setWeekOffset(w => w - 1)} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">‹</button>
               <div className="bg-amber-500 text-black px-3 py-1 font-black text-xs uppercase italic shadow-md min-w-[160px] text-center">{weekLabel}</div>
