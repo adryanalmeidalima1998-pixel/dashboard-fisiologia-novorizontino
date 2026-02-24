@@ -45,6 +45,21 @@ function gpsColor(val, avg, metric) {
   return 'bg-white'
 }
 
+
+// Helper para TH clicável com seta de ordenação
+function SortTh({ label, col, sort, onSort, className = "" }) {
+  const active = sort.col === col
+  const arrow = active ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ' ↕'
+  return (
+    <th
+      className={`py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500 cursor-pointer hover:text-amber-600 select-none whitespace-nowrap ${className}`}
+      onClick={() => onSort(col)}
+    >
+      {label}<span className="text-[8px] ml-0.5 opacity-60">{arrow}</span>
+    </th>
+  )
+}
+
 // Dias da semana para tabela
 const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
@@ -53,39 +68,19 @@ export default function SemanalDashboard() {
   const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar } = useData()
   const [weekOffset, setWeekOffset] = useState(0)
   const [activeTab, setActiveTab] = useState('carga') // 'carga' | 'gps' | 'bemEstar'
+  // Ordenação das tabelas: { col, dir }
+  const [sortCarga, setSortCarga] = useState({ col: 'total', dir: 'desc' })
+  const [sortGps, setSortGps] = useState({ col: 'totalDistance', dir: 'desc' })
+  const [sortBem, setSortBem] = useState({ col: 'avg', dir: 'desc' })
 
-  // Semanas disponíveis com dados (para o seletor)
-  const availableWeeks = useMemo(() => {
-    const weeks = new Map()
-    const allDates = [
-      ...bemEstarData.map(r => r.date),
-      ...gpsData.map(s => s.date),
-    ]
-    for (const dateStr of allDates) {
-      if (!dateStr) continue
-      const d = new Date(dateStr + 'T12:00:00')
-      if (isNaN(d)) continue
-      const dow = d.getDay() === 0 ? 6 : d.getDay() - 1
-      const mon = new Date(d)
-      mon.setDate(d.getDate() - dow)
-      mon.setHours(0, 0, 0, 0)
-      const key = isoDate(mon)
-      if (!weeks.has(key)) weeks.set(key, mon)
+  // Toggle sort helper
+  function toggleSort(current, col, setter) {
+    if (current.col === col) {
+      setter({ col, dir: current.dir === 'desc' ? 'asc' : 'desc' })
+    } else {
+      setter({ col, dir: 'desc' })
     }
-    // Sempre incluir a semana atual
-    const { monday: thisMon } = getWeekBounds(0)
-    weeks.set(isoDate(thisMon), thisMon)
-    return Array.from(weeks.entries())
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([key, mon]) => {
-        const sun = new Date(mon); sun.setDate(mon.getDate() + 6)
-        const label = `${mon.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${sun.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
-        return { key, mon, label }
-      })
-  }, [bemEstarData, gpsData])
-
-  // Sincronizar weekOffset com a semana selecionada pelo select
-  const selectedWeekKey = isoDate(getWeekBounds(weekOffset).monday)
+  }
 
   const { monday, sunday } = useMemo(() => getWeekBounds(weekOffset), [weekOffset])
   const weekLabel = `${monday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${sunday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
@@ -195,6 +190,59 @@ export default function SemanalDashboard() {
     return stats
   }, [weekAthletes, srpeMatrix, weekDays, bemEstarData, weekOffset])
 
+  // ── Listas ordenadas por aba ─────────────────────────────────────────────────
+  const sortedCargaAthletes = useMemo(() => {
+    const list = [...weekAthletes]
+    const { col, dir } = sortCarga
+    list.sort((a, b) => {
+      let va, vb
+      if (col === 'name') { va = a; vb = b; return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va) }
+      if (col === 'total') { va = weekStats[a]?.weeklySum || 0; vb = weekStats[b]?.weeklySum || 0 }
+      else if (col === 'mono') { va = weekStats[a]?.monotony || 0; vb = weekStats[b]?.monotony || 0 }
+      else if (col === 'strain') { va = weekStats[a]?.strain || 0; vb = weekStats[b]?.strain || 0 }
+      else if (col === 'acwr') { va = weekStats[a]?.acwr || 0; vb = weekStats[b]?.acwr || 0 }
+      else { va = 0; vb = 0 }
+      return dir === 'desc' ? vb - va : va - vb
+    })
+    return list
+  }, [weekAthletes, weekStats, sortCarga])
+
+  const sortedGpsAthletes = useMemo(() => {
+    const list = weekAthletes.filter(a => gpsWeekly[a])
+    const { col, dir } = sortGps
+    list.sort((a, b) => {
+      if (col === 'name') return dir === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+      const va = gpsWeekly[a]?.[col] || 0
+      const vb = gpsWeekly[b]?.[col] || 0
+      return dir === 'desc' ? vb - va : va - vb
+    })
+    return list
+  }, [weekAthletes, gpsWeekly, sortGps])
+
+  const sortedBemAthletes = useMemo(() => {
+    const list = weekAthletes.filter(a => weekBemEstar.some(r => r.playerName === a))
+    const { col, dir } = sortBem
+    list.sort((a, b) => {
+      if (col === 'name') return dir === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+      const getAvg = (name) => {
+        const scores = weekDays.map(d => {
+          const pre = weekBemEstar.find(r => r.playerName === name && r.type === 'pre' && r.date === d)
+          return pre?.wellnessScore || null
+        }).filter(Boolean)
+        return scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0
+      }
+      const va = getAvg(a), vb = getAvg(b)
+      return dir === 'desc' ? vb - va : va - vb
+    })
+    return list
+  }, [weekAthletes, weekBemEstar, weekDays, sortBem])
+
+  // Médias do grupo para carga
+  const groupCargaAvg = useMemo(() => {
+    const vals = weekAthletes.map(a => weekStats[a]?.weeklySum || 0).filter(v => v > 0)
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+  }, [weekAthletes, weekStats])
+
   // Médias de GPS (para colorização relativa)
   const gpsAvgs = useMemo(() => {
     const vals = Object.values(gpsWeekly).filter(v => v !== null)
@@ -229,24 +277,10 @@ export default function SemanalDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">← VOLTAR</button>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Semana:</span>
-              <select
-                value={selectedWeekKey}
-                onChange={e => {
-                  const idx = availableWeeks.findIndex(w => w.key === e.target.value)
-                  if (idx === -1) return
-                  const { monday: thisMon } = getWeekBounds(0)
-                  const diffMs = availableWeeks[idx].mon.getTime() - thisMon.getTime()
-                  const diffWeeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000))
-                  setWeekOffset(diffWeeks)
-                }}
-                className="bg-amber-500 text-black px-3 py-1.5 font-black text-xs uppercase rounded-lg focus:outline-none cursor-pointer"
-              >
-                {availableWeeks.map(w => (
-                  <option key={w.key} value={w.key}>{w.label}</option>
-                ))}
-              </select>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setWeekOffset(w => w - 1)} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">‹</button>
+              <div className="bg-amber-500 text-black px-3 py-1 font-black text-xs uppercase italic shadow-md min-w-[160px] text-center">{weekLabel}</div>
+              <button onClick={() => setWeekOffset(w => Math.min(0, w + 1))} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">›</button>
             </div>
           </div>
         </header>
@@ -295,33 +329,38 @@ export default function SemanalDashboard() {
         {/* TAB: CARGA & MONOTONIA */}
         {activeTab === 'carga' && (
           <div className="overflow-x-auto">
-            {weekAthletes.length > 0 ? (
+            {sortedCargaAthletes.length > 0 ? (
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="border-b-2 border-slate-900">
-                    <th className="text-left py-2 pr-4 font-black uppercase tracking-widest text-[10px] text-slate-500">Atleta</th>
+                    <SortTh label="Atleta" col="name" sort={sortCarga} onSort={c => toggleSort(sortCarga, c, setSortCarga)} className="text-left pr-4" />
                     {weekDays.map((d, i) => (
                       <th key={d} className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500 min-w-[60px]">
                         {WEEK_DAYS[i]}<br />
                         <span className="font-medium normal-case text-[9px]">{new Date(d + 'T12:00:00').getDate()}</span>
                       </th>
                     ))}
-                    <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500">Total</th>
-                    <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500">Mono.</th>
-                    <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500">Strain</th>
-                    <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500">ACWR</th>
+                    <SortTh label="Total UA" col="total" sort={sortCarga} onSort={c => toggleSort(sortCarga, c, setSortCarga)} />
+                    <SortTh label="Mono." col="mono" sort={sortCarga} onSort={c => toggleSort(sortCarga, c, setSortCarga)} />
+                    <SortTh label="Strain" col="strain" sort={sortCarga} onSort={c => toggleSort(sortCarga, c, setSortCarga)} />
+                    <SortTh label="ACWR" col="acwr" sort={sortCarga} onSort={c => toggleSort(sortCarga, c, setSortCarga)} />
                   </tr>
                 </thead>
                 <tbody>
-                  {weekAthletes.map((athlete, idx) => {
+                  {sortedCargaAthletes.map((athlete, idx) => {
                     const stats = weekStats[athlete]
+                    const total = stats?.weeklySum || 0
+                    const below20 = groupCargaAvg && total > 0 && total < groupCargaAvg * 0.8
                     return (
                       <tr
                         key={athlete}
-                        className={`border-b border-slate-100 cursor-pointer hover:bg-amber-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                        className={`border-b border-slate-100 cursor-pointer hover:bg-amber-50 transition-colors ${below20 ? 'bg-red-50/60' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
                         onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}
                       >
-                        <td className="py-2 pr-4 font-bold text-black text-xs">{athlete.split(' ').slice(0, 2).join(' ')}</td>
+                        <td className="py-2 pr-4 font-bold text-black text-xs">
+                          <span>{athlete.split(' ').slice(0, 2).join(' ')}</span>
+                          {below20 && <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-black">↓20%</span>}
+                        </td>
                         {weekDays.map(d => {
                           const load = srpeMatrix[athlete][d]
                           const intensity = load ? Math.min(load / 800, 1) : 0
@@ -340,22 +379,45 @@ export default function SemanalDashboard() {
                             </td>
                           )
                         })}
-                        <td className="text-center py-2 px-2 font-black text-black">{stats?.weeklySum > 0 ? stats.weeklySum.toFixed(0) : '—'}</td>
+                        <td className={`text-center py-2 px-2 font-black ${below20 ? 'text-red-600' : 'text-black'}`}>{total > 0 ? total.toFixed(0) : '—'}</td>
                         <td className={`text-center py-2 px-2 font-black ${monotonyColor(stats?.monotony)}`}>{stats?.monotony > 0 ? stats.monotony.toFixed(2) : '—'}</td>
                         <td className="text-center py-2 px-2 font-bold text-slate-600">{stats?.strain > 0 ? stats.strain.toFixed(0) : '—'}</td>
-                        <td className={`text-center py-2 px-2 font-black ${acwrColor(stats?.acwr)}`}>
-                          {stats?.acwr ? stats.acwr.toFixed(2) : '—'}
-                        </td>
+                        <td className={`text-center py-2 px-2 font-black ${acwrColor(stats?.acwr)}`}>{stats?.acwr ? stats.acwr.toFixed(2) : '—'}</td>
                       </tr>
                     )
                   })}
                 </tbody>
+                {groupCargaAvg && (
+                  <tfoot className="border-t-2 border-slate-300 bg-amber-50">
+                    <tr>
+                      <td className="py-2 pr-4 font-black text-[10px] uppercase text-amber-700">Média Grupo</td>
+                      {weekDays.map(d => {
+                        const dayLoads = sortedCargaAthletes.map(a => srpeMatrix[a][d]).filter(Boolean)
+                        const dayAvg = dayLoads.length ? dayLoads.reduce((a,b) => a+b, 0) / dayLoads.length : null
+                        const intensity = dayAvg ? Math.min(dayAvg / 800, 1) : 0
+                        return (
+                          <td key={d} className="text-center py-2 px-2">
+                            {dayAvg ? (
+                              <div className="mx-auto w-10 h-7 rounded flex items-center justify-center font-black text-[10px]"
+                                style={{ backgroundColor: `rgba(245, 158, 11, ${0.15 + intensity * 0.75})`, color: '#92400e' }}>
+                                {dayAvg.toFixed(0)}
+                              </div>
+                            ) : <span className="text-slate-300 text-[10px]">—</span>}
+                          </td>
+                        )
+                      })}
+                      <td className="text-center py-2 px-2 font-black text-amber-700">{groupCargaAvg.toFixed(0)}</td>
+                      <td colSpan={3} />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             ) : (
               <div className="text-center py-12 text-slate-400 font-medium text-sm">Sem dados de carga para esta semana</div>
             )}
             <div className="mt-3 flex flex-wrap gap-4 text-[10px] font-bold text-slate-500">
               <span>🟡 Intensidade da cor = carga sRPE×min</span>
+              <span className="text-red-500">🔴 Fundo vermelho = carga &gt;20% abaixo da média do grupo</span>
               <span>ACWR ideal: 0.8–1.3 | &gt;1.5 = risco</span>
               <span>Monotonia &lt;1.5 = ✓ | &gt;2.0 = atenção</span>
             </div>
@@ -365,58 +427,78 @@ export default function SemanalDashboard() {
         {/* TAB: GPS SEMANAL */}
         {activeTab === 'gps' && (
           <div className="overflow-x-auto">
-            {weekAthletes.filter(a => gpsWeekly[a]).length > 0 ? (
-              <table className="w-full border-collapse text-xs">
-                <thead>
-                  <tr className="border-b-2 border-slate-900">
-                    <th className="text-left py-2 pr-4 font-black uppercase tracking-widest text-[10px] text-slate-500">Atleta</th>
-                    <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-500">Sessions</th>
-                    <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-500">Dist (m)</th>
-                    <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-500">HSR (m)</th>
-                    <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-500">Sprint (m)</th>
-                    <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-500">Sprints (n)</th>
-                    <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-500">ACC+DEC</th>
-                    <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-500">m/min méd</th>
-                    <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-500">Vmax</th>
-                    <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-500">PL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {weekAthletes.filter(a => gpsWeekly[a]).map((athlete, idx) => {
-                    const g = gpsWeekly[athlete]
-                    return (
-                      <tr key={athlete} className={`border-b border-slate-100 hover:bg-amber-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
-                        onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}>
-                        <td className="py-2 pr-4 font-bold text-black">{athlete.split(' ').slice(0, 2).join(' ')}</td>
-                        <td className="text-center py-2 px-3 font-bold text-slate-600">{g.sessions}</td>
-                        <td className={`text-center py-2 px-3 font-black rounded ${gpsColor(g.totalDistance, gpsAvgs.totalDistance)}`}>{g.totalDistance.toFixed(0)}</td>
-                        <td className={`text-center py-2 px-3 font-black ${gpsColor(g.hsr, gpsAvgs.hsr)}`}>{g.hsr.toFixed(0)}</td>
-                        <td className="text-center py-2 px-3 font-bold text-slate-700">{g.sprintDistance.toFixed(0)}</td>
-                        <td className="text-center py-2 px-3 font-bold text-slate-700">{g.sprintCount}</td>
-                        <td className={`text-center py-2 px-3 font-black ${gpsColor(g.accDecel, gpsAvgs.accDecel)}`}>{g.accDecel}</td>
-                        <td className="text-center py-2 px-3 font-bold text-slate-700">{g.avgMmin.toFixed(1)}</td>
-                        <td className="text-center py-2 px-3 font-bold text-slate-700">{g.maxVelocity.toFixed(1)}</td>
-                        <td className="text-center py-2 px-3 font-bold text-slate-700">{g.playerLoad.toFixed(0)}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot className="border-t-2 border-slate-300">
-                  <tr>
-                    <td className="py-2 pr-4 font-black text-[10px] uppercase text-slate-500">Média grupo</td>
-                    <td className="text-center py-2 px-3 text-slate-400">—</td>
-                    {['totalDistance', 'hsr', 'sprintDistance'].map(k => (
-                      <td key={k} className="text-center py-2 px-3 font-black text-slate-500 text-[10px]">
-                        {gpsAvgs[k]?.toFixed(0) ?? '—'}
-                      </td>
-                    ))}
-                    <td colSpan={5} />
-                  </tr>
-                </tfoot>
-              </table>
-            ) : (
+            {sortedGpsAthletes.length > 0 ? (() => {
+              // Médias GPS do grupo (somente atletas com dados)
+              const gpsKeys = ['totalDistance','hsr','sprintDistance','sprintCount','accDecel','avgMmin','maxVelocity','playerLoad']
+              const groupGpsAvg = {}
+              gpsKeys.forEach(k => {
+                const vals = sortedGpsAthletes.map(a => gpsWeekly[a]?.[k] || 0).filter(v => v > 0)
+                groupGpsAvg[k] = vals.length ? vals.reduce((a,b) => a+b,0) / vals.length : null
+              })
+              // Cor relativa à média: verde >120%, vermelho <80%
+              function cellCls(val, avg) {
+                if (!val || !avg) return ''
+                const r = val / avg
+                if (r > 1.2) return 'bg-green-100 text-green-800'
+                if (r < 0.8) return 'bg-red-50 text-red-700'
+                return ''
+              }
+              return (
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b-2 border-slate-900">
+                      <SortTh label="Atleta" col="name" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} className="text-left pr-4" />
+                      <SortTh label="Sessões" col="sessions" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} />
+                      <SortTh label="Dist (m)" col="totalDistance" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} />
+                      <SortTh label="HSR (m)" col="hsr" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} />
+                      <SortTh label="Sprint (m)" col="sprintDistance" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} />
+                      <SortTh label="Sprints" col="sprintCount" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} />
+                      <SortTh label="ACC+DEC" col="accDecel" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} />
+                      <SortTh label="m/min" col="avgMmin" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} />
+                      <SortTh label="Vmax" col="maxVelocity" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} />
+                      <SortTh label="PL" col="playerLoad" sort={sortGps} onSort={c => toggleSort(sortGps, c, setSortGps)} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedGpsAthletes.map((athlete, idx) => {
+                      const g = gpsWeekly[athlete]
+                      return (
+                        <tr key={athlete} className={`border-b border-slate-100 hover:bg-amber-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                          onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}>
+                          <td className="py-2 pr-4 font-bold text-black">{athlete.split(' ').slice(0, 2).join(' ')}</td>
+                          <td className="text-center py-2 px-3 font-bold text-slate-600">{g.sessions}</td>
+                          <td className={`text-center py-2 px-3 font-black rounded ${cellCls(g.totalDistance, groupGpsAvg.totalDistance)}`}>{g.totalDistance.toFixed(0)}</td>
+                          <td className={`text-center py-2 px-3 font-black rounded ${cellCls(g.hsr, groupGpsAvg.hsr)}`}>{g.hsr.toFixed(0)}</td>
+                          <td className={`text-center py-2 px-3 font-bold rounded ${cellCls(g.sprintDistance, groupGpsAvg.sprintDistance)}`}>{g.sprintDistance.toFixed(0)}</td>
+                          <td className={`text-center py-2 px-3 font-bold rounded ${cellCls(g.sprintCount, groupGpsAvg.sprintCount)}`}>{g.sprintCount}</td>
+                          <td className={`text-center py-2 px-3 font-black rounded ${cellCls(g.accDecel, groupGpsAvg.accDecel)}`}>{g.accDecel}</td>
+                          <td className={`text-center py-2 px-3 font-bold rounded ${cellCls(g.avgMmin, groupGpsAvg.avgMmin)}`}>{g.avgMmin.toFixed(1)}</td>
+                          <td className="text-center py-2 px-3 font-bold text-slate-700">{g.maxVelocity.toFixed(1)}</td>
+                          <td className={`text-center py-2 px-3 font-bold rounded ${cellCls(g.playerLoad, groupGpsAvg.playerLoad)}`}>{g.playerLoad.toFixed(0)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot className="border-t-2 border-slate-300 bg-amber-50">
+                    <tr>
+                      <td className="py-2 pr-4 font-black text-[10px] uppercase text-amber-700">Média Grupo</td>
+                      <td className="text-center py-2 px-3 text-amber-500 font-black">—</td>
+                      {gpsKeys.map(k => (
+                        <td key={k} className="text-center py-2 px-3 font-black text-amber-700 text-[10px]">
+                          {groupGpsAvg[k] != null ? (k === 'avgMmin' ? groupGpsAvg[k].toFixed(1) : k === 'maxVelocity' ? groupGpsAvg[k].toFixed(1) : groupGpsAvg[k].toFixed(0)) : '—'}
+                        </td>
+                      ))}
+                    </tr>
+                  </tfoot>
+                </table>
+              )
+            })() : (
               <div className="text-center py-12 text-slate-400 font-medium text-sm">Sem GPS para esta semana. Carregue um CSV na página inicial.</div>
             )}
+            <div className="mt-3 flex flex-wrap gap-4 text-[10px] font-bold text-slate-500">
+              <span className="text-green-700">🟢 Verde = &gt;20% acima da média do grupo</span>
+              <span className="text-red-600">🔴 Vermelho = &gt;20% abaixo da média do grupo</span>
+            </div>
           </div>
         )}
 
@@ -428,66 +510,109 @@ export default function SemanalDashboard() {
                 {isLoadingBemEstar ? 'Carregando...' : '↻ Atualizar Bem-Estar'}
               </button>
             </div>
-            {weekAthletes.length > 0 ? (
-              <table className="w-full border-collapse text-xs">
-                <thead>
-                  <tr className="border-b-2 border-slate-900">
-                    <th className="text-left py-2 pr-4 font-black uppercase tracking-widest text-[10px] text-slate-500">Atleta</th>
-                    {weekDays.map((d, i) => (
-                      <th key={d} className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500 min-w-[60px]">
-                        {WEEK_DAYS[i]}<br />
-                        <span className="font-medium normal-case text-[9px]">{new Date(d + 'T12:00:00').getDate()}</span>
-                      </th>
-                    ))}
-                    <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500">Média</th>
-                    <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500">Alertas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {weekAthletes.filter(a => weekBemEstar.some(r => r.playerName === a)).map((athlete, idx) => {
-                    const scores = weekDays.map(d => {
-                      const pre = weekBemEstar.find(r => r.playerName === athlete && r.type === 'pre' && r.date === d)
-                      return pre?.wellnessScore || null
-                    })
-                    const validScores = scores.filter(s => s !== null)
-                    const avgScore = validScores.length > 0 ? validScores.reduce((a, b) => a + b, 0) / validScores.length : null
-                    const hasDor = weekBemEstar.some(r => r.playerName === athlete && r.temDor)
-                    const hasBaixo = scores.some(s => s !== null && s < 2.5)
+            {sortedBemAthletes.length > 0 ? (() => {
+              // Média do grupo por dia e geral
+              const dayGroupAvgs = weekDays.map(d => {
+                const scores = sortedBemAthletes.map(a => {
+                  const pre = weekBemEstar.find(r => r.playerName === a && r.type === 'pre' && r.date === d)
+                  return pre?.wellnessScore || null
+                }).filter(Boolean)
+                return scores.length ? scores.reduce((a,b) => a+b,0) / scores.length : null
+              })
+              const allGroupScores = dayGroupAvgs.filter(Boolean)
+              const groupWellnessAvg = allGroupScores.length ? allGroupScores.reduce((a,b) => a+b,0) / allGroupScores.length : null
 
-                    return (
-                      <tr key={athlete} className={`border-b border-slate-100 hover:bg-amber-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
-                        onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}>
-                        <td className="py-2 pr-4 font-bold text-black">{athlete.split(' ').slice(0, 2).join(' ')}</td>
-                        {scores.map((s, i) => (
-                          <td key={i} className="text-center py-2 px-2">
-                            {s !== null ? (
-                              <div className={`mx-auto w-9 h-7 rounded flex items-center justify-center font-black text-xs ${s >= 3.5 ? 'bg-green-100 text-green-700' : s >= 2.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                                {s.toFixed(1)}
-                              </div>
-                            ) : (
-                              <div className="mx-auto w-9 h-7 rounded flex items-center justify-center text-slate-200 text-xs">—</div>
-                            )}
+              return (
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b-2 border-slate-900">
+                      <SortTh label="Atleta" col="name" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} className="text-left pr-4" />
+                      {weekDays.map((d, i) => (
+                        <th key={d} className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500 min-w-[60px]">
+                          {WEEK_DAYS[i]}<br />
+                          <span className="font-medium normal-case text-[9px]">{new Date(d + 'T12:00:00').getDate()}</span>
+                        </th>
+                      ))}
+                      <SortTh label="Média" col="avg" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} />
+                      <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500">Alertas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedBemAthletes.map((athlete, idx) => {
+                      const scores = weekDays.map(d => {
+                        const pre = weekBemEstar.find(r => r.playerName === athlete && r.type === 'pre' && r.date === d)
+                        return pre?.wellnessScore || null
+                      })
+                      const validScores = scores.filter(s => s !== null)
+                      const avgScore = validScores.length > 0 ? validScores.reduce((a, b) => a + b, 0) / validScores.length : null
+                      const hasDor = weekBemEstar.some(r => r.playerName === athlete && r.temDor)
+                      const hasBaixo = scores.some(s => s !== null && s < 2.5)
+                      const belowGroup = groupWellnessAvg && avgScore && avgScore < groupWellnessAvg * 0.8
+
+                      return (
+                        <tr key={athlete} className={`border-b border-slate-100 hover:bg-amber-50 cursor-pointer ${belowGroup ? 'bg-red-50/40' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                          onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}>
+                          <td className="py-2 pr-4 font-bold text-black">
+                            {athlete.split(' ').slice(0, 2).join(' ')}
+                            {belowGroup && <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-black">↓20%</span>}
                           </td>
-                        ))}
-                        <td className="text-center py-2 px-2">
-                          <span className={`font-black text-xs ${avgScore ? (avgScore >= 3.5 ? 'text-green-600' : avgScore >= 2.5 ? 'text-amber-600' : 'text-red-600') : 'text-slate-400'}`}>
-                            {avgScore ? avgScore.toFixed(1) : '—'}
-                          </span>
+                          {scores.map((s, i) => (
+                            <td key={i} className="text-center py-2 px-2">
+                              {s !== null ? (
+                                <div className={`mx-auto w-9 h-7 rounded flex items-center justify-center font-black text-xs ${s >= 3.5 ? 'bg-green-100 text-green-700' : s >= 2.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                                  {s.toFixed(1)}
+                                </div>
+                              ) : (
+                                <div className="mx-auto w-9 h-7 rounded flex items-center justify-center text-slate-200 text-xs">—</div>
+                              )}
+                            </td>
+                          ))}
+                          <td className="text-center py-2 px-2">
+                            <span className={`font-black text-xs ${avgScore ? (avgScore >= 3.5 ? 'text-green-600' : avgScore >= 2.5 ? 'text-amber-600' : 'text-red-600') : 'text-slate-400'}`}>
+                              {avgScore ? avgScore.toFixed(1) : '—'}
+                            </span>
+                          </td>
+                          <td className="text-center py-2 px-2">
+                            <div className="flex gap-1 justify-center">
+                              {hasBaixo && <span className="text-[8px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-black">SCORE</span>}
+                              {hasDor && <span className="text-[8px] bg-orange-100 text-orange-600 px-1 py-0.5 rounded font-black">DOR</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot className="border-t-2 border-slate-300 bg-amber-50">
+                    <tr>
+                      <td className="py-2 pr-4 font-black text-[10px] uppercase text-amber-700">Média Grupo</td>
+                      {dayGroupAvgs.map((avg, i) => (
+                        <td key={i} className="text-center py-2 px-2">
+                          {avg !== null ? (
+                            <div className={`mx-auto w-9 h-7 rounded flex items-center justify-center font-black text-xs ${avg >= 3.5 ? 'bg-green-100 text-green-700' : avg >= 2.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                              {avg.toFixed(1)}
+                            </div>
+                          ) : <span className="text-slate-300 text-xs">—</span>}
                         </td>
-                        <td className="text-center py-2 px-2">
-                          <div className="flex gap-1 justify-center">
-                            {hasBaixo && <span className="text-[8px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-black">SCORE</span>}
-                            {hasDor && <span className="text-[8px] bg-orange-100 text-orange-600 px-1 py-0.5 rounded font-black">DOR</span>}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            ) : (
+                      ))}
+                      <td className="text-center py-2 px-2">
+                        <span className={`font-black text-xs ${groupWellnessAvg ? (groupWellnessAvg >= 3.5 ? 'text-green-600' : groupWellnessAvg >= 2.5 ? 'text-amber-600' : 'text-red-600') : 'text-slate-400'}`}>
+                          {groupWellnessAvg ? groupWellnessAvg.toFixed(1) : '—'}
+                        </span>
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              )
+            })() : (
               <div className="text-center py-12 text-slate-400 font-medium text-sm">Sem dados de bem-estar para esta semana</div>
             )}
+            <div className="mt-3 flex flex-wrap gap-4 text-[10px] font-bold text-slate-500">
+              <span className="text-green-600">🟢 ≥ 3.5 = Prontidão boa</span>
+              <span className="text-amber-600">🟡 2.5–3.4 = Atenção</span>
+              <span className="text-red-600">🔴 &lt; 2.5 = Alerta</span>
+              <span className="text-red-500">↓20% = wellness abaixo de 80% da média do grupo</span>
+            </div>
           </div>
         )}
 
