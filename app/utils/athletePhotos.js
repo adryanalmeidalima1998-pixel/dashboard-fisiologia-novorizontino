@@ -1,12 +1,12 @@
 // Mapeia nome normalizado para arquivo em /public/club/
-// Usa escape unicode para nomes com acentos - zero caracteres especiais no codigo fonte.
+// Todos os arquivos devem ter nomes sem acentos (ex: joao_pedro.png, mauricio.png)
 
 const PHOTO_MAP = {
   'gustavo_hobold':         'gustavo_hobold.png',
   'adrian':                 'adrian.png',
   'bernardo_lima':          'bernardo_lima.png',
   'bruno_santana':          'bruno_santana.png',
-  'caio_flavio':            'caio_fl\u00e1vio.png',
+  'caio_flavio':            'caio_flavio.png',
   'carlos_roberto':         'carlos_roberto.png',
   'daniel_junior':          'daniel_junior.png',
   'dhiogo_batista':         'dhiogo_batista.png',
@@ -14,15 +14,18 @@ const PHOTO_MAP = {
   'felipe_toscano':         'felipe_toscano.png',
   'francisco':              'francisco.png',
   'gabriel_correia':        'gabriel_correia.png',
-  'joao_ferraz':            'jo\u00e3o_ferraz.png',
-  'joao_pedro':             'jo\u00e3o_pedro.png',
+  'joao_ferraz':            'joao_ferraz.png',
+  'joao_pedro':             'joao_pedro.png',
+  'joao_pedro_bezerra':     'joao_pedro.png',
+  'joao_pedro_vieira':      'joao_pedro.png',
   'kawe_rodrigues':         'kawe_rodrigues.png',
   'kayki_andrade':          'kayki_andrade.png',
-  'leonardo_goncalves':     'leonardo_gon\u00e7alves.png',
+  'leonardo_goncalves':     'leonardo_goncalves.png',
   'matheus_geres':          'matheus_geres.png',
   'mateus_geres':           'matheus_geres.png',
   'matias':                 'matias.png',
-  'mauricio':               'mauri\u00edcio.png',
+  'mauricio':               'mauricio.png',
+  'mauricio_alves':         'mauricio.png',
   'nicolas_badu':           'nicolas_badu.png',
   'pedro_henrique_martins': 'pedro_henrique_martins.png',
   'pedro_miguel':           'pedro_miguel.png',
@@ -51,21 +54,24 @@ export function getAthletePhoto(playerName) {
   if (!playerName) return null
   const key = normalizeKey(playerName)
 
-  if (PHOTO_MAP[key]) return '/club/' + encodeURIComponent(PHOTO_MAP[key])
+  // 1. Match exato
+  if (PHOTO_MAP[key]) return '/club/' + PHOTO_MAP[key]
 
+  // 2. Match por prefixo com underscore como delimitador
   for (const [mapKey, file] of Object.entries(PHOTO_MAP)) {
-    if (key.startsWith(mapKey) || mapKey.startsWith(key)) {
-      return '/club/' + encodeURIComponent(file)
+    if (key.startsWith(mapKey + '_') || mapKey.startsWith(key + '_')) {
+      return '/club/' + file
     }
   }
 
+  // 3. Match por tokens (todos os tokens do menor estao no maior, minimo 2 tokens)
   const keyTokens = key.split('_').filter(Boolean)
   for (const [mapKey, file] of Object.entries(PHOTO_MAP)) {
     const mapTokens = mapKey.split('_').filter(Boolean)
     const shorter = keyTokens.length <= mapTokens.length ? keyTokens : mapTokens
     const longer  = keyTokens.length <= mapTokens.length ? mapTokens : keyTokens
-    if (shorter.length >= 1 && shorter.every(t => longer.includes(t))) {
-      return '/club/' + encodeURIComponent(file)
+    if (shorter.length >= 2 && shorter.every(t => longer.includes(t))) {
+      return '/club/' + file
     }
   }
 
