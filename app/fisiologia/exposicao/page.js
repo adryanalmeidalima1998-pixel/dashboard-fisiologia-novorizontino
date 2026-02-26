@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
+import { AthleteAvatar } from '../../utils/athletePhotos'
 
 function daysBetween(dateStr1, dateStr2) {
   const d1 = typeof dateStr1 === 'string' ? new Date(dateStr1.split('/').reverse().join('-')) : dateStr1
@@ -211,6 +212,7 @@ export default function ExposicaoDashboard() {
             <div className="flex flex-wrap gap-2">
               {exposureData.filter(d => d.riscoDestreino && !d.noData).map(d => (
                 <div key={d.athlete} className="bg-white border border-red-200 rounded-lg px-3 py-2 flex items-center gap-3">
+                  <AthleteAvatar name={d.athlete} size="w-8 h-8" className="ring-2 ring-red-400 ring-offset-1" />
                   <div>
                     <p className="text-xs font-black text-black">{d.athlete}</p>
                     <p className="text-[9px] text-red-600 font-bold">
@@ -276,13 +278,23 @@ export default function ExposicaoDashboard() {
                 {sortedData.map((d, i) => {
                   if (d.noData) return (
                     <tr key={d.athlete} className="border-b border-slate-100 opacity-40">
-                      <td className="py-2 pr-3 font-bold text-slate-500">{d.athlete}</td>
+                      <td className="py-2 pr-3 font-bold text-slate-500">
+                        <div className="flex items-center gap-2">
+                          <AthleteAvatar name={d.athlete} size="w-6 h-6" />
+                          <span>{d.athlete}</span>
+                        </div>
+                      </td>
                       <td colSpan={9} className="py-2 pr-3 text-slate-400 italic text-[10px]">Sem GPS carregado</td>
                     </tr>
                   )
                   return (
                     <tr key={d.athlete} className={`border-b border-slate-100 hover:bg-amber-50 ${d.riscoDestreino ? 'bg-red-50/40' : ''}`}>
-                      <td className="py-2 pr-3 font-black text-black">{d.athlete}</td>
+                      <td className="py-2 pr-3 font-black text-black">
+                        <div className="flex items-center gap-2">
+                          <AthleteAvatar name={d.athlete} size="w-7 h-7" />
+                          <span>{d.athlete}</span>
+                        </div>
+                      </td>
                       <td className="py-2 pr-3 font-bold text-amber-700">{d.vmaxMax ? `${d.vmaxMax.toFixed(1)} km/h` : '—'}</td>
                       <td className={`py-2 pr-3 font-black ${d.lastVmaxPct >= 90 ? 'text-green-600' : d.lastVmaxPct >= 80 ? 'text-amber-600' : 'text-slate-500'}`}>
                         {d.lastVmaxPct ? `${d.lastVmaxPct}%` : '—'}
