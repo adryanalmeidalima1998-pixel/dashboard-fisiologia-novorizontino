@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
+import { AthleteAvatar } from '../../utils/athletePhotos'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function scoreColor(score) {
@@ -62,20 +63,27 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, onDetail }) {
       className={`border-2 rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${hasAlert ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}
       onClick={() => onDetail(athlete.name)}
     >
-      {/* Nome + score */}
-      <div className="flex items-start justify-between mb-3">
+      {/* Foto + Nome + score */}
+      <div className="flex items-center gap-2.5 mb-3">
+        <AthleteAvatar name={athlete.name} size="w-10 h-10" ring={!hasAlert} className={hasAlert ? 'ring-2 ring-red-400 ring-offset-1' : ''} />
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-black uppercase tracking-tighter text-black truncate pr-2">{athlete.name}</p>
-          {hasAlert && (
+          <p className="text-xs font-black uppercase tracking-tighter text-black truncate">{athlete.name}</p>
+          {hasAlert ? (
             <div className="flex items-center gap-1 mt-0.5">
               <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
               <span className="text-[9px] font-black text-red-600 uppercase tracking-wider">Alerta</span>
             </div>
+          ) : (
+            <div className={`mt-0.5 inline-flex px-1.5 py-0.5 rounded text-[9px] font-black ${scoreColor(ws)}`}>
+              {ws ? ws.toFixed(1) : '—'}
+            </div>
           )}
         </div>
-        <div className={`px-2 py-1 rounded-lg text-sm font-black ${scoreColor(ws)}`}>
-          {ws ? ws.toFixed(1) : '—'}
-        </div>
+        {hasAlert && (
+          <div className={`px-2 py-1 rounded-lg text-sm font-black shrink-0 ${scoreColor(ws)}`}>
+            {ws ? ws.toFixed(1) : '—'}
+          </div>
+        )}
       </div>
 
       {/* Bem-estar indicators */}
