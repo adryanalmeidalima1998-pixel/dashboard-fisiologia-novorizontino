@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import { useData } from '../../context/DataContext'
+import { AthleteAvatar } from '../../utils/athletePhotos'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function getWeekBounds(offset = 0) {
@@ -402,8 +403,11 @@ export default function SemanalDashboard() {
                         onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}
                       >
                         <td className="py-2 pr-4 font-bold text-black text-xs">
-                          <span>{athlete.split(' ').slice(0, 2).join(' ')}</span>
-                          {below20 && <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-black">↓20%</span>}
+                          <div className="flex items-center gap-2">
+                            <AthleteAvatar name={athlete} size="w-7 h-7" />
+                            <span>{athlete.split(' ').slice(0, 2).join(' ')}</span>
+                            {below20 && <span className="ml-1 text-[8px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-black">↓20%</span>}
+                          </div>
                         </td>
                         {weekDays.map(d => {
                           const load = srpeMatrix[athlete][d]
@@ -509,7 +513,12 @@ export default function SemanalDashboard() {
                       return (
                         <tr key={athlete} className={`border-b border-slate-100 hover:bg-amber-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
                           onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}>
-                          <td className="py-2 pr-4 font-bold text-black">{athlete.split(' ').slice(0, 2).join(' ')}</td>
+                          <td className="py-2 pr-4 font-bold text-black">
+                            <div className="flex items-center gap-2">
+                              <AthleteAvatar name={athlete} size="w-7 h-7" />
+                              <span>{athlete.split(' ').slice(0, 2).join(' ')}</span>
+                            </div>
+                          </td>
                           <td className="text-center py-2 px-3 font-bold text-slate-600">{g.sessions}</td>
                           <td className={`text-center py-2 px-3 font-black rounded ${cellCls(g.totalDistance, groupGpsAvg.totalDistance)}`}>{g.totalDistance.toFixed(0)}</td>
                           <td className={`text-center py-2 px-3 font-black rounded ${cellCls(g.hsr, groupGpsAvg.hsr)}`}>{g.hsr.toFixed(0)}</td>
@@ -597,8 +606,13 @@ export default function SemanalDashboard() {
                         <tr key={athlete} className={`border-b border-slate-100 hover:bg-amber-50 cursor-pointer ${belowGroup ? 'bg-red-50/40' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
                           onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}>
                           <td className="py-2 pr-4 font-bold text-black">
-                            {athlete.split(' ').slice(0, 2).join(' ')}
-                            {belowGroup && <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-black">↓20%</span>}
+                            <div className="flex items-center gap-2">
+                              <AthleteAvatar name={athlete} size="w-7 h-7" />
+                              <span>
+                                {athlete.split(' ').slice(0, 2).join(' ')}
+                                {belowGroup && <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-black">↓20%</span>}
+                              </span>
+                            </div>
                           </td>
                           {scores.map((s, i) => (
                             <td key={i} className="text-center py-2 px-2">
