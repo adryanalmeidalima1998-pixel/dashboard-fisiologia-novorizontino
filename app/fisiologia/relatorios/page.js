@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
+import { AthleteAvatar } from '../../utils/athletePhotos'
 
 function scoreBg(s) {
   if (!s) return 'bg-slate-100 text-slate-400'
@@ -281,6 +282,7 @@ export default function RelatoriosPage() {
                       {posSessao.top5.map((r, i) => (
                         <div key={i} className="flex items-center gap-3">
                           <span className="text-[10px] font-black text-amber-600 w-4">{i+1}.</span>
+                          <AthleteAvatar name={r.playerName} size="w-6 h-6" />
                           <span className="text-xs font-black flex-1 truncate">{r.playerName}</span>
                           <span className="text-xs font-black text-black">{r.totalDistance?.toFixed(0)} m</span>
                           <span className="text-[10px] text-slate-400">{r.hsr?.toFixed(0)}m HSR</span>
@@ -298,7 +300,7 @@ export default function RelatoriosPage() {
                           const pct = vm ? calcVmaxPct(r.maxVelocity, vm) : null
                           return (
                             <div key={i} className="flex items-center gap-3">
-                              <span className="w-2 h-2 bg-green-500 rounded-full shrink-0" />
+                              <AthleteAvatar name={r.playerName} size="w-6 h-6" />
                               <span className="text-xs font-black flex-1">{r.playerName}</span>
                               <span className="text-xs font-black text-green-600">{pct}%</span>
                               <span className="text-[10px] text-slate-400">{r.maxVelocity?.toFixed(1)} km/h</span>
@@ -328,7 +330,12 @@ export default function RelatoriosPage() {
                           const srpe = posSessao.srpePost.find(p => p.playerName === r.playerName)
                           return (
                             <tr key={i} className="border-b border-slate-100 hover:bg-amber-50">
-                              <td className="py-1.5 pr-3 font-black">{r.playerName}</td>
+                              <td className="py-1.5 pr-3 font-black">
+                                <div className="flex items-center gap-2">
+                                  <AthleteAvatar name={r.playerName} size="w-6 h-6" />
+                                  <span>{r.playerName}</span>
+                                </div>
+                              </td>
                               <td className="py-1.5 pr-3">{r.totalDistance?.toFixed(0)}</td>
                               <td className="py-1.5 pr-3">{r.distanceRelative?.toFixed(1)}</td>
                               <td className="py-1.5 pr-3">{r.hsr?.toFixed(0)}</td>
@@ -384,7 +391,12 @@ export default function RelatoriosPage() {
                       <tbody>
                         {posJogo.map((r, i) => (
                           <tr key={i} className={`border-b border-slate-100 hover:bg-amber-50 ${r.achieved90 ? 'bg-green-50/30' : ''}`}>
-                            <td className="py-2 pr-3 font-black">{r.playerName}</td>
+                            <td className="py-2 pr-3 font-black">
+                              <div className="flex items-center gap-2">
+                                <AthleteAvatar name={r.playerName} size="w-6 h-6" />
+                                <span>{r.playerName}</span>
+                              </div>
+                            </td>
                             <td className="py-2 pr-3">{r.totalDistance?.toFixed(0)}</td>
                             <td className="py-2 pr-3">{r.distanceRelative?.toFixed(1)}</td>
                             <td className="py-2 pr-3">{r.hsr?.toFixed(0)}</td>
@@ -473,9 +485,12 @@ export default function RelatoriosPage() {
               <>
                 <div className="bg-slate-900 text-white rounded-xl p-5">
                   <div className="flex justify-between items-center mb-4">
-                    <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Relatório Individual — 8 semanas</p>
-                      <p className="text-2xl font-black">{athlete}</p>
+                    <div className="flex items-center gap-4">
+                      <AthleteAvatar name={athlete} size="w-16 h-16" ring className="border-2 border-slate-700" />
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Relatório Individual — 8 semanas</p>
+                        <p className="text-2xl font-black">{athlete}</p>
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                       <div className="text-center">
