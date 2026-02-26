@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useMemo, Suspense } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
+import { AthleteAvatar } from '../../utils/athletePhotos'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip as RTooltip, Legend
@@ -672,15 +673,20 @@ function IndividualContent() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="col-span-2 bg-slate-50 border-2 border-slate-200 rounded-xl p-4">
           <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Atleta</p>
-          <div className="flex items-center gap-3 flex-wrap">
-            <p className="text-xl font-black">{athlete}</p>
-            {athletePosition && <span className="bg-amber-100 text-amber-700 text-xs font-black px-2 py-0.5 rounded-lg uppercase">{athletePosition}</span>}
-          </div>
-          <div className="mt-3 flex gap-3 flex-wrap">
-            {vmaxMax && <div className="bg-amber-50 border border-amber-200 rounded-lg px-2 py-1"><p className="text-[9px] font-black text-amber-700 uppercase">Vmax baseline</p><p className="text-sm font-black text-amber-800">{vmaxMax.toFixed(1)} km/h</p></div>}
-            {vmaxPct && <div className={`border rounded-lg px-2 py-1 ${vmaxPct >= 90 ? 'bg-green-50 border-green-200' : vmaxPct >= 80 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}><p className="text-[9px] font-black text-slate-600 uppercase">Últ. % Vmax</p><p className={`text-sm font-black ${vmaxPct >= 90 ? 'text-green-700' : vmaxPct >= 80 ? 'text-amber-700' : 'text-slate-600'}`}>{vmaxPct}%</p></div>}
-            {lastWellness && <div className={`border rounded-lg px-2 py-1 ${scoreBg(lastWellness.wellnessScore)}`}><p className="text-[9px] font-black uppercase">Bem-estar último</p><p className="text-sm font-black">{lastWellness.wellnessScore?.toFixed(1) ?? '—'}</p></div>}
-            <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><p className="text-[9px] font-black text-slate-500 uppercase">Registros</p><p className="text-sm font-black">{wellinessHistory.length} bem-estar · {gpsHistory.length} GPS</p></div>
+          <div className="flex items-center gap-4 flex-wrap">
+            <AthleteAvatar name={athlete} size="w-20 h-20" ring className="border-2 border-white shadow-md" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className="text-xl font-black">{athlete}</p>
+                {athletePosition && <span className="bg-amber-100 text-amber-700 text-xs font-black px-2 py-0.5 rounded-lg uppercase">{athletePosition}</span>}
+              </div>
+              <div className="mt-3 flex gap-3 flex-wrap">
+                {vmaxMax && <div className="bg-amber-50 border border-amber-200 rounded-lg px-2 py-1"><p className="text-[9px] font-black text-amber-700 uppercase">Vmax baseline</p><p className="text-sm font-black text-amber-800">{vmaxMax.toFixed(1)} km/h</p></div>}
+                {vmaxPct && <div className={`border rounded-lg px-2 py-1 ${vmaxPct >= 90 ? 'bg-green-50 border-green-200' : vmaxPct >= 80 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}><p className="text-[9px] font-black text-slate-600 uppercase">Últ. % Vmax</p><p className={`text-sm font-black ${vmaxPct >= 90 ? 'text-green-700' : vmaxPct >= 80 ? 'text-amber-700' : 'text-slate-600'}`}>{vmaxPct}%</p></div>}
+                {lastWellness && <div className={`border rounded-lg px-2 py-1 ${scoreBg(lastWellness.wellnessScore)}`}><p className="text-[9px] font-black uppercase">Bem-estar último</p><p className="text-sm font-black">{lastWellness.wellnessScore?.toFixed(1) ?? '—'}</p></div>}
+                <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><p className="text-[9px] font-black text-slate-500 uppercase">Registros</p><p className="text-sm font-black">{wellinessHistory.length} bem-estar · {gpsHistory.length} GPS</p></div>
+              </div>
+            </div>
           </div>
         </div>
         <div className={`border-2 rounded-xl p-4 ${scoreBg(lastWellness?.wellnessScore)}`}>
