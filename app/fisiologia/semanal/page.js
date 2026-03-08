@@ -4,6 +4,10 @@ import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import { useData } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
+  ResponsiveContainer, ReferenceLine, Cell, LabelList
+} from 'recharts'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function getWeekBounds(offset = 0) {
@@ -292,6 +296,54 @@ export default function SemanalDashboard() {
     }
   }, [gpsWeekly])
 
+  // ── MÉDIAS GPS: grupo + por posição ─────────────────────────────────────────
+  const GPS_METRICS = [
+    { key: 'totalDistance', label: 'Distância Total', unit: 'm', color: '#f59e0b', decimals: 0 },
+    { key: 'avgMmin',       label: 'm/min',           unit: 'm/min', color: '#10b981', decimals: 1 },
+    { key: 'hsr',           label: 'HSR',             unit: 'm', color: '#3b82f6', decimals: 0 },
+    { key: 'sprintDistance',label: 'Sprint',          unit: 'm', color: '#ef4444', decimals: 0 },
+    { key: 'sprintCount',   label: 'Nº Sprints',      unit: '', color: '#8b5cf6', decimals: 0 },
+    { key: 'accDecel',      label: 'ACC+DEC',         unit: '', color: '#f97316', decimals: 0 },
+    { key: 'playerLoad',    label: 'Player Load',     unit: '', color: '#06b6d4', decimals: 0 },
+  ]
+
+  const mediaGpsData = useMemo(() => {
+    const athletesWithGps = weekAthletes.filter(a => gpsWeekly[a])
+    if (!athletesWithGps.length) return null
+
+    // Médias do grupo por métrica
+    const teamAvgs = {}
+    GPS_METRICS.forEach(m => {
+      const vals = athletesWithGps.map(a => gpsWeekly[a][m.key] || 0).filter(v => v > 0)
+      teamAvgs[m.key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+    })
+
+    // Posições com pelo menos 1 atleta com GPS
+    const positions = [...new Set(athletesWithGps.map(a => playerPositions[a]).filter(Boolean))].sort()
+
+    // Médias por posição por métrica
+    const posAvgs = {}
+    positions.forEach(pos => {
+      const posAthletes = athletesWithGps.filter(a => playerPositions[a] === pos)
+      posAvgs[pos] = {}
+      GPS_METRICS.forEach(m => {
+        const vals = posAthletes.map(a => gpsWeekly[a][m.key] || 0).filter(v => v > 0)
+        posAvgs[pos][m.key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+      })
+    })
+
+    // Dados para o gráfico de cada métrica: um ponto por posição + time todo
+    const chartData = GPS_METRICS.map(m => {
+      const points = [
+        { label: 'EQUIPE', value: teamAvgs[m.key], isTeam: true },
+        ...positions.map(pos => ({ label: pos, value: posAvgs[pos][m.key], isTeam: false })),
+      ]
+      return { ...m, points, teamAvg: teamAvgs[m.key] }
+    })
+
+    return { chartData, teamAvgs, positions, n: athletesWithGps.length }
+  }, [weekAthletes, gpsWeekly, playerPositions])
+
   const totalLoad = weekAthletes.reduce((s, a) => s + (weekStats[a]?.weeklySum || 0), 0)
   const avgAcwr = weekAthletes.filter(a => weekStats[a]?.acwr).length > 0
     ? weekAthletes.filter(a => weekStats[a]?.acwr).reduce((s, a) => s + weekStats[a].acwr, 0) / weekAthletes.filter(a => weekStats[a]?.acwr).length
@@ -360,6 +412,7 @@ export default function SemanalDashboard() {
             { id: 'carga', label: 'Carga & Monotonia' },
             { id: 'gps', label: 'GPS Semanal' },
             { id: 'bemEstar', label: 'Bem-Estar Diário' },
+            { id: 'mediaGps', label: '📊 Médias GPS' },
           ].map(t => (
             <button
               key={t.id}
@@ -671,6 +724,136 @@ export default function SemanalDashboard() {
               <span className="text-red-600">🔴 &lt; 2.5 = Alerta</span>
               <span className="text-red-500">↓20% = wellness abaixo de 80% da média do grupo</span>
             </div>
+          </div>
+        )}
+
+        {/* TAB: MÉDIAS GPS */}
+        {activeTab === 'mediaGps' && (
+          <div className="flex flex-col gap-8">
+            {!mediaGpsData ? (
+              <div className="text-center py-16 text-slate-400 font-medium text-sm">Sem GPS para esta semana. Carregue um CSV na página inicial.</div>
+            ) : (
+              <>
+                {/* CABEÇALHO DA SEÇÃO */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Médias da semana</p>
+                    <h2 className="text-xl font-black text-black uppercase leading-none">Grupo + Por Posição</h2>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">Atletas com GPS</p>
+                    <p className="text-2xl font-black text-amber-700">{mediaGpsData.n}</p>
+                  </div>
+                </div>
+
+                {/* GRID DE GRÁFICOS — um por métrica */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {mediaGpsData.chartData.map(metric => {
+                    const fmt = v => v == null ? '—' : metric.decimals === 1 ? v.toFixed(1) : v.toFixed(0)
+                    // Tooltip customizado
+                    const CustomTooltip = ({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      return (
+                        <div className="bg-white border border-slate-200 rounded-lg p-2 text-xs shadow-lg">
+                          <p className="font-black text-slate-700 mb-0.5">{label}</p>
+                          <p style={{ color: metric.color }} className="font-black">
+                            {fmt(payload[0]?.value)} {metric.unit}
+                          </p>
+                        </div>
+                      )
+                    }
+                    return (
+                      <div key={metric.key} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                        {/* Título + valor médio do grupo */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{metric.label}</p>
+                            <p className="text-2xl font-black leading-none" style={{ color: metric.color }}>
+                              {fmt(metric.teamAvg)}
+                              <span className="text-xs font-bold text-slate-400 ml-1">{metric.unit}</span>
+                            </p>
+                            <p className="text-[9px] text-slate-400 mt-0.5 font-bold uppercase">Média da equipe</p>
+                          </div>
+                          <div
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-black"
+                            style={{ backgroundColor: metric.color }}
+                          >
+                            {metric.label.charAt(0)}
+                          </div>
+                        </div>
+
+                        {/* Gráfico de barras: EQUIPE + posições */}
+                        {metric.points.length > 1 && mediaGpsData.positions.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={160}>
+                            <BarChart
+                              data={metric.points}
+                              margin={{ top: 4, right: 4, bottom: 4, left: -20 }}
+                              barSize={28}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                              <XAxis
+                                dataKey="label"
+                                tick={{ fontSize: 9, fontWeight: 'bold', fill: '#64748b' }}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                tick={{ fontSize: 8, fill: '#94a3b8' }}
+                                axisLine={false}
+                                tickLine={false}
+                                tickFormatter={v => metric.decimals === 1 ? v.toFixed(1) : v.toFixed(0)}
+                              />
+                              <RTooltip content={<CustomTooltip />} />
+                              {/* Linha de referência = média do grupo */}
+                              {metric.teamAvg && (
+                                <ReferenceLine
+                                  y={metric.teamAvg}
+                                  stroke={metric.color}
+                                  strokeDasharray="4 2"
+                                  strokeWidth={1.5}
+                                  label={{ value: 'Equipe', position: 'insideTopRight', fontSize: 8, fill: metric.color, fontWeight: 'bold' }}
+                                />
+                              )}
+                              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                {metric.points.map((entry, i) => (
+                                  <Cell
+                                    key={i}
+                                    fill={entry.isTeam ? metric.color : `${metric.color}55`}
+                                    stroke={entry.isTeam ? metric.color : 'none'}
+                                    strokeWidth={entry.isTeam ? 2 : 0}
+                                  />
+                                ))}
+                                <LabelList
+                                  dataKey="value"
+                                  position="top"
+                                  style={{ fontSize: 8, fontWeight: 'bold', fill: '#64748b' }}
+                                  formatter={v => v != null ? fmt(v) : ''}
+                                />
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          // Sem posições cadastradas: barra simples de contexto
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: '100%', backgroundColor: `${metric.color}40` }} />
+                            </div>
+                            <span className="text-[9px] text-slate-400 font-bold">Sem posições cadastradas</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* LEGENDA */}
+                <div className="flex flex-wrap gap-4 text-[10px] font-bold text-slate-500 border-t border-slate-100 pt-3">
+                  <span>📊 Barra sólida = média da equipe · Barras transparentes = média por posição</span>
+                  <span>— — Linha tracejada = referência da equipe</span>
+                  <span>Posições com cadastro no Catapult aparecem automaticamente</span>
+                </div>
+              </>
+            )}
           </div>
         )}
 
