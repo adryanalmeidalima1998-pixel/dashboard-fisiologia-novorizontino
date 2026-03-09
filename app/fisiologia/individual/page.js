@@ -6,7 +6,8 @@ import { useData, calcVmaxPct } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  ResponsiveContainer, Tooltip as RTooltip, Legend
+  ResponsiveContainer, Tooltip as RTooltip, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine,
 } from 'recharts'
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
@@ -480,6 +481,57 @@ function IndividualContent() {
     return gpsData[gpsData.length - 1].rows.filter(r => r.playerName === athlete && !r.isOutlier)
   }, [gpsData, athlete])
 
+  // ── ALERTA DE TENDÊNCIA: 3+ sessões seguidas abaixo da média do grupo ────────
+  const trendAlert = useMemo(() => {
+    if (gpsHistory.length < 3) return null
+    const last3 = gpsHistory.slice(-3)
+
+    // Média do grupo por métrica (todas as sessões, excluindo o próprio atleta)
+    const groupRows = gpsData.flatMap(s => s.rows.filter(r => r.playerName !== athlete && r.periodNumber === 0 && !r.isOutlier))
+    if (!groupRows.length) return null
+
+    const alerts = []
+    const checkMetric = (key, label, unit) => {
+      const groupAvg = groupRows.reduce((s, r) => s + (r[key] || 0), 0) / groupRows.length
+      if (!groupAvg) return
+      const allBelow = last3.every(r => (r[key] || 0) < groupAvg * 0.85)
+      if (allBelow) {
+        const lastVal = last3[last3.length - 1][key] || 0
+        const pct = Math.round((lastVal / groupAvg) * 100)
+        alerts.push({ metric: label, value: lastVal.toFixed(key === 'distanceRelative' ? 1 : 0), unit, pct, groupAvg: groupAvg.toFixed(key === 'distanceRelative' ? 1 : 0) })
+      }
+    }
+    checkMetric('totalDistance',    'Distância Total', 'm')
+    checkMetric('hsr',              'HSR',             'm')
+    checkMetric('distanceRelative', 'm/min',           'm/min')
+    checkMetric('sprintDistance',   'Sprint',          'm')
+    checkMetric('playerLoad',       'Player Load',     '')
+    return alerts.length ? alerts : null
+  }, [gpsHistory, gpsData, athlete])
+
+  // ── GRÁFICO DE EVOLUÇÃO TEMPORAL (últimas 12 sessões) ───────────────────────
+  const temporalChartData = useMemo(() => {
+    const last12 = gpsHistory.slice(-12)
+    if (last12.length < 2) return null
+
+    const groupRows = gpsData.flatMap(s => s.rows.filter(r => r.playerName !== athlete && r.periodNumber === 0 && !r.isOutlier))
+    const groupAvgDist   = groupRows.length ? groupRows.reduce((s,r) => s+(r.totalDistance||0),0)/groupRows.length : null
+    const groupAvgHsr    = groupRows.length ? groupRows.reduce((s,r) => s+(r.hsr||0),0)/groupRows.length : null
+    const groupAvgMmin   = groupRows.length ? groupRows.reduce((s,r) => s+(r.distanceRelative||0),0)/groupRows.length : null
+    const groupAvgPl     = groupRows.length ? groupRows.reduce((s,r) => s+(r.playerLoad||0),0)/groupRows.length : null
+
+    return {
+      points: last12.map(r => ({
+        label: r.sessionDate ? r.sessionDate.slice(0, 5) : '?',
+        dist:  Math.round(r.totalDistance || 0),
+        hsr:   Math.round(r.hsr || 0),
+        mmin:  parseFloat((r.distanceRelative || 0).toFixed(1)),
+        pl:    Math.round(r.playerLoad || 0),
+      })),
+      avgs: { dist: groupAvgDist, hsr: groupAvgHsr, mmin: groupAvgMmin, pl: groupAvgPl },
+    }
+  }, [gpsHistory, gpsData, athlete])
+
   // Merge: CSV positions + manual overrides
   const playerPositions = useMemo(() => ({ ...ctxPositions, ...positionOverrides }), [ctxPositions, positionOverrides])
 
@@ -823,6 +875,80 @@ function IndividualContent() {
           {gpsHistory.length > 0 ? (
             <div className="border border-slate-200 rounded-xl p-4">
               <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Histórico GPS — Todas as sessões</p>
+
+              {/* ALERTA DE TENDÊNCIA */}
+              {trendAlert && (
+                <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-lg flex-shrink-0">📉</span>
+                    <div>
+                      <p className="text-xs font-black text-amber-800 uppercase tracking-wide mb-1">
+                        Alerta de Tendência — 3 sessões consecutivas abaixo da média do grupo
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {trendAlert.map((a, i) => (
+                          <div key={i} className="bg-white border border-amber-200 rounded-lg px-2 py-1">
+                            <span className="text-[10px] font-black text-amber-700">{a.metric}: </span>
+                            <span className="text-[10px] font-black text-red-600">{a.value}{a.unit}</span>
+                            <span className="text-[9px] text-slate-500"> ({a.pct}% da média {a.groupAvg}{a.unit})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* GRÁFICO DE EVOLUÇÃO TEMPORAL */}
+              {temporalChartData && (
+                <div className="mb-5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Evolução — Últimas {temporalChartData.points.length} sessões</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      { key: 'dist', label: 'Distância Total (m)', color: '#f59e0b', avg: temporalChartData.avgs.dist },
+                      { key: 'hsr',  label: 'HSR (m)',             color: '#3b82f6', avg: temporalChartData.avgs.hsr },
+                      { key: 'mmin', label: 'm/min',               color: '#10b981', avg: temporalChartData.avgs.mmin },
+                      { key: 'pl',   label: 'Player Load',         color: '#06b6d4', avg: temporalChartData.avgs.pl },
+                    ].map(({ key, label, color, avg }) => (
+                      <div key={key} className="border border-slate-100 rounded-xl p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+                          {avg && <p className="text-[9px] font-bold text-slate-400">Média grupo: <span style={{color}}>{key === 'mmin' ? avg.toFixed(1) : Math.round(avg)}</span></p>}
+                        </div>
+                        <ResponsiveContainer width="100%" height={120}>
+                          <LineChart data={temporalChartData.points} margin={{ top: 4, right: 8, bottom: 4, left: -20 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                            <XAxis dataKey="label" tick={{ fontSize: 8, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 8, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                            <RTooltip
+                              contentStyle={{ fontSize: 11, fontWeight: 'bold', border: '1px solid #e2e8f0', borderRadius: 8 }}
+                              formatter={v => [key === 'mmin' ? v.toFixed(1) : v, label]}
+                            />
+                            {avg && (
+                              <ReferenceLine
+                                y={avg}
+                                stroke={color}
+                                strokeDasharray="4 2"
+                                strokeOpacity={0.5}
+                                label={{ value: 'Grupo', position: 'insideTopRight', fontSize: 7, fill: color }}
+                              />
+                            )}
+                            <Line
+                              type="monotone"
+                              dataKey={key}
+                              stroke={color}
+                              strokeWidth={2}
+                              dot={{ fill: color, r: 3 }}
+                              activeDot={{ r: 5 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div><p className="text-[10px] font-black uppercase text-slate-400 mb-1">Distância Total</p><Sparkline values={gpsDistPoints} color="#10b981" height={36} /></div>
                 <div><p className="text-[10px] font-black uppercase text-slate-400 mb-1">HSR (m)</p><Sparkline values={gpsHsrPoints} color="#f59e0b" height={36} /></div>
