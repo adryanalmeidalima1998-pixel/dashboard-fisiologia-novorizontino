@@ -65,6 +65,8 @@ function calcReadiness(preData, acwr, daysSinceLastGps) {
 
   return { score: Math.round(score), verdict, reasons }
 }
+
+function scoreColor(score) {
   if (score === null || score === undefined) return 'bg-slate-100 text-slate-400'
   if (score >= 3.5) return 'bg-green-100 text-green-700'
   if (score >= 2.5) return 'bg-amber-100 text-amber-700'
