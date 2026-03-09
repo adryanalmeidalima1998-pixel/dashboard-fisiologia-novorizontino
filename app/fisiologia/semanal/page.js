@@ -72,8 +72,9 @@ export default function SemanalDashboard() {
   const router = useRouter()
   const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions } = useData()
   const [weekOffset, setWeekOffset] = useState(0)
-  const [activeTab, setActiveTab] = useState('carga') // 'carga' | 'gps' | 'bemEstar'
+  const [activeTab, setActiveTab] = useState('carga') // 'carga' | 'gps' | 'bemEstar' | 'heatmap' | 'mediaGps'
   const [filterPosition, setFilterPosition] = useState('')
+  const [isPdfLoading, setIsPdfLoading] = useState(false)
   // Ordenação das tabelas: { col, dir }
   const [sortCarga, setSortCarga] = useState({ col: 'total', dir: 'desc' })
   const [sortGps, setSortGps] = useState({ col: 'totalDistance', dir: 'desc' })
@@ -365,6 +366,141 @@ export default function SemanalDashboard() {
           </div>
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">← VOLTAR</button>
+            <button
+              onClick={async () => {
+                setIsPdfLoading(true)
+                try {
+                  const { default: jsPDF } = await import('jspdf')
+                  const { default: autoTable } = await import('jspdf-autotable')
+                  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+                  const pageW = doc.internal.pageSize.getWidth()
+                  const pageH = doc.internal.pageSize.getHeight()
+
+                  // ── Cabeçalho ──
+                  doc.setFillColor(245, 158, 11)
+                  doc.rect(0, 0, pageW, 18, 'F')
+                  doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0)
+                  doc.text('RELATÓRIO SEMANAL DE CARGA', 14, 11)
+                  doc.setFontSize(9); doc.setFont('helvetica', 'normal')
+                  doc.text(weekLabel, pageW - 14, 11, { align: 'right' })
+
+                  // ── KPIs ──
+                  doc.setFontSize(8); doc.setTextColor(80, 80, 80)
+                  doc.text(`Atletas: ${weekAthletes.length}  |  Sessões GPS: ${weekGps.length}  |  ACWR Médio: ${avgAcwr ? avgAcwr.toFixed(2) : '—'}  |  Risco Elevado: ${highRiskCount}`, 14, 25)
+
+                  // ── Heatmap de carga (tabela) ──
+                  doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(0,0,0)
+                  doc.text('HEATMAP DE CARGA sRPE × min', 14, 32)
+                  const heatHead = [['Atleta', ...WEEK_DAYS, 'Total UA', 'ACWR', 'Monotonia']]
+                  const heatBody = sortedCargaAthletes.slice(0, 25).map(a => {
+                    const st = weekStats[a]
+                    return [
+                      a.split(' ').slice(0,2).join(' '),
+                      ...weekDays.map(d => srpeMatrix[a][d] ? srpeMatrix[a][d].toFixed(0) : '—'),
+                      st?.weeklySum?.toFixed(0) || '—',
+                      st?.acwr ? st.acwr.toFixed(2) : '—',
+                      st?.monotony ? st.monotony.toFixed(2) : '—',
+                    ]
+                  })
+                  autoTable(doc, {
+                    startY: 34,
+                    head: heatHead,
+                    body: heatBody,
+                    styles: { fontSize: 7, cellPadding: 1.5 },
+                    headStyles: { fillColor: [30, 30, 30], textColor: 255, fontStyle: 'bold' },
+                    alternateRowStyles: { fillColor: [250, 250, 250] },
+                    didParseCell: (data) => {
+                      if (data.section === 'body') {
+                        const val = parseFloat(data.cell.text[0])
+                        if (!isNaN(val) && data.column.index >= 1 && data.column.index <= 7) {
+                          if (val >= 600) { data.cell.styles.fillColor = [254, 240, 138]; data.cell.styles.textColor = [146, 64, 14] }
+                          else if (val >= 400) { data.cell.styles.fillColor = [254, 215, 170]; data.cell.styles.textColor = [154, 52, 18] }
+                          else if (val > 0) { data.cell.styles.fillColor = [254, 243, 199]; data.cell.styles.textColor = [180, 83, 9] }
+                        }
+                      }
+                    },
+                    margin: { left: 14, right: 14 },
+                  })
+
+                  let y = doc.lastAutoTable.finalY + 8
+
+                  // ── GPS Médias ──
+                  const gpsKeys2 = ['totalDistance','hsr','sprintDistance','sprintCount','accDecel','avgMmin','playerLoad']
+                  const gpsLabels2 = ['Dist (m)','HSR (m)','Sprint (m)','Nº Sprints','ACC+DEC','m/min','PL']
+                  const gpsAthletesForPdf = weekAthletes.filter(a => gpsWeekly[a])
+                  if (gpsAthletesForPdf.length > 0 && y < pageH - 40) {
+                    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(0,0,0)
+                    doc.text('MÉDIAS GPS SEMANAL', 14, y)
+                    const gpsGroupAvg2 = {}
+                    gpsKeys2.forEach(k => {
+                      const vals = gpsAthletesForPdf.map(a => gpsWeekly[a]?.[k] || 0).filter(v => v > 0)
+                      gpsGroupAvg2[k] = vals.length ? vals.reduce((a,b) => a+b,0) / vals.length : null
+                    })
+                    autoTable(doc, {
+                      startY: y + 2,
+                      head: [['Atleta', ...gpsLabels2]],
+                      body: [
+                        ['Média Grupo', ...gpsKeys2.map(k => gpsGroupAvg2[k] != null ? (k === 'avgMmin' ? gpsGroupAvg2[k].toFixed(1) : gpsGroupAvg2[k].toFixed(0)) : '—')],
+                        ...gpsAthletesForPdf.slice(0, 15).map(a => {
+                          const g = gpsWeekly[a]
+                          return [
+                            a.split(' ').slice(0,2).join(' '),
+                            ...gpsKeys2.map(k => g?.[k] != null ? (k === 'avgMmin' ? g[k].toFixed(1) : g[k].toFixed(0)) : '—')
+                          ]
+                        })
+                      ],
+                      styles: { fontSize: 7, cellPadding: 1.5 },
+                      headStyles: { fillColor: [30,30,30], textColor: 255, fontStyle: 'bold' },
+                      bodyStyles: { textColor: [40,40,40] },
+                      rowPageBreak: 'avoid',
+                      margin: { left: 14, right: 14 },
+                    })
+                  }
+
+                  // ── Alertas ACWR ──
+                  const alertas = weekAthletes.filter(a => weekStats[a]?.acwr > 1.5 || weekStats[a]?.monotony > 2)
+                  if (alertas.length > 0) {
+                    const finalY2 = doc.lastAutoTable ? doc.lastAutoTable.finalY + 8 : y + 8
+                    if (finalY2 < pageH - 30) {
+                      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(200, 0, 0)
+                      doc.text(`⚠ ALERTAS DE CARGA (${alertas.length} atleta(s))`, 14, finalY2)
+                      autoTable(doc, {
+                        startY: finalY2 + 2,
+                        head: [['Atleta', 'ACWR', 'Monotonia', 'Strain', 'Situação']],
+                        body: alertas.map(a => {
+                          const st = weekStats[a]
+                          return [
+                            a.split(' ').slice(0,2).join(' '),
+                            st?.acwr?.toFixed(2) || '—',
+                            st?.monotony?.toFixed(2) || '—',
+                            st?.strain?.toFixed(0) || '—',
+                            st?.acwr > 1.5 ? 'ACWR ALTO' : 'MONOTONIA ALTA',
+                          ]
+                        }),
+                        styles: { fontSize: 7, cellPadding: 1.5 },
+                        headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold' },
+                        alternateRowStyles: { fillColor: [255, 245, 245] },
+                        margin: { left: 14, right: 14 },
+                      })
+                    }
+                  }
+
+                  // ── Rodapé ──
+                  doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150)
+                  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} · Central de Fisiologia GN · Confidencial`, pageW / 2, pageH - 5, { align: 'center' })
+
+                  doc.save(`relatorio-semanal-${monday.toISOString().split('T')[0]}.pdf`)
+                } catch(e) {
+                  console.error('PDF error:', e)
+                } finally {
+                  setIsPdfLoading(false)
+                }
+              }}
+              disabled={isPdfLoading || weekAthletes.length === 0}
+              className="flex items-center gap-2 bg-black text-white px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isPdfLoading ? '⏳ Gerando...' : '⬇ PDF Semanal'}
+            </button>
             {availablePositions.length > 0 && (
               <select
                 value={filterPosition}
@@ -407,11 +543,12 @@ export default function SemanalDashboard() {
         </div>
 
         {/* TABS */}
-        <div className="flex gap-1 border-b border-slate-200">
+        <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
           {[
             { id: 'carga', label: 'Carga & Monotonia' },
             { id: 'gps', label: 'GPS Semanal' },
             { id: 'bemEstar', label: 'Bem-Estar Diário' },
+            { id: 'heatmap', label: '🌡 Heatmap' },
             { id: 'mediaGps', label: '📊 Médias GPS' },
           ].map(t => (
             <button
@@ -723,6 +860,160 @@ export default function SemanalDashboard() {
               <span className="text-amber-600">🟡 2.5–3.4 = Atenção</span>
               <span className="text-red-600">🔴 &lt; 2.5 = Alerta</span>
               <span className="text-red-500">↓20% = wellness abaixo de 80% da média do grupo</span>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: HEATMAP */}
+        {activeTab === 'heatmap' && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Visualização rápida</p>
+                <h2 className="text-xl font-black text-black uppercase leading-none">Heatmap de Carga</h2>
+              </div>
+              <div className="flex items-center gap-3 text-[10px] font-bold">
+                <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded" style={{background:'rgba(245,158,11,0.9)'}} /> Alta (&gt;600 UA)</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded" style={{background:'rgba(245,158,11,0.55)'}} /> Média</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded" style={{background:'rgba(245,158,11,0.2)'}} /> Baixa</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-slate-100" /> Ausente</span>
+              </div>
+            </div>
+
+            {sortedCargaAthletes.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 text-sm font-medium">Sem dados de carga para esta semana</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <div className="inline-block min-w-full">
+                  {/* Header dos dias */}
+                  <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: '200px repeat(7, 1fr) 80px 60px' }}>
+                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-2">Atleta</div>
+                    {WEEK_DAYS.map((d, i) => (
+                      <div key={d} className="text-center text-[9px] font-black uppercase tracking-widest text-slate-500">
+                        {d}<br />
+                        <span className="font-medium normal-case text-[8px]">
+                          {new Date(weekDays[i] + 'T12:00:00').getDate()}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="text-center text-[9px] font-black uppercase tracking-widest text-slate-500">Total</div>
+                    <div className="text-center text-[9px] font-black uppercase tracking-widest text-slate-500">ACWR</div>
+                  </div>
+
+                  {/* Linhas dos atletas */}
+                  {sortedCargaAthletes.map((athlete, idx) => {
+                    const stats = weekStats[athlete]
+                    const total = stats?.weeklySum || 0
+                    const maxLoad = Math.max(...sortedCargaAthletes.map(a => weekStats[a]?.weeklySum || 0), 1)
+                    return (
+                      <div
+                        key={athlete}
+                        className="grid gap-1 mb-0.5 items-center cursor-pointer group"
+                        style={{ gridTemplateColumns: '200px repeat(7, 1fr) 80px 60px' }}
+                        onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}
+                      >
+                        {/* Nome */}
+                        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg group-hover:bg-amber-50 transition-colors">
+                          <AthleteAvatar name={athlete} size="w-6 h-6" />
+                          <span className="text-xs font-bold text-black truncate">{athlete.split(' ').slice(0,2).join(' ')}</span>
+                        </div>
+
+                        {/* Células de carga por dia */}
+                        {weekDays.map(d => {
+                          const load = srpeMatrix[athlete][d]
+                          const intensity = load ? Math.min(load / 800, 1) : 0
+                          const bgAlpha = load ? 0.15 + intensity * 0.75 : 0
+                          return (
+                            <div
+                              key={d}
+                              className="h-10 rounded-lg flex items-center justify-center transition-all"
+                              style={{
+                                backgroundColor: load ? `rgba(245,158,11,${bgAlpha})` : '#f8fafc',
+                                border: load ? 'none' : '1px solid #f1f5f9',
+                              }}
+                            >
+                              {load ? (
+                                <span
+                                  className="text-[10px] font-black"
+                                  style={{ color: intensity > 0.5 ? '#92400e' : '#b45309' }}
+                                >
+                                  {load.toFixed(0)}
+                                </span>
+                              ) : (
+                                <span className="text-slate-200 text-[9px]">—</span>
+                              )}
+                            </div>
+                          )
+                        })}
+
+                        {/* Total com barra inline */}
+                        <div className="relative h-10 rounded-lg overflow-hidden bg-slate-100">
+                          <div
+                            className="absolute inset-y-0 left-0 rounded-lg transition-all"
+                            style={{
+                              width: `${(total / maxLoad) * 100}%`,
+                              backgroundColor: total > 0 ? 'rgba(245,158,11,0.35)' : 'transparent',
+                            }}
+                          />
+                          <div className="relative flex items-center justify-center h-full">
+                            <span className="text-[10px] font-black text-slate-700">{total > 0 ? total.toFixed(0) : '—'}</span>
+                          </div>
+                        </div>
+
+                        {/* ACWR badge */}
+                        <div className={`h-10 rounded-lg flex items-center justify-center text-[10px] font-black ${
+                          !stats?.acwr ? 'bg-slate-100 text-slate-400'
+                          : stats.acwr >= 0.8 && stats.acwr <= 1.3 ? 'bg-green-100 text-green-700'
+                          : stats.acwr > 1.3 && stats.acwr <= 1.5 ? 'bg-amber-100 text-amber-700'
+                          : stats.acwr > 1.5 ? 'bg-red-100 text-red-700'
+                          : 'bg-slate-100 text-slate-400'
+                        }`}>
+                          {stats?.acwr ? stats.acwr.toFixed(2) : '—'}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Linha de média do grupo */}
+                  {groupCargaAvg && (
+                    <div className="grid gap-1 mt-1 border-t-2 border-slate-900 pt-1 items-center" style={{ gridTemplateColumns: '200px repeat(7, 1fr) 80px 60px' }}>
+                      <div className="px-2 py-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-amber-700">Média Grupo</span>
+                      </div>
+                      {weekDays.map(d => {
+                        const dayLoads = sortedCargaAthletes.map(a => srpeMatrix[a][d]).filter(Boolean)
+                        const dayAvg = dayLoads.length ? dayLoads.reduce((a,b) => a+b,0) / dayLoads.length : null
+                        const intensity = dayAvg ? Math.min(dayAvg / 800, 1) : 0
+                        return (
+                          <div
+                            key={d}
+                            className="h-10 rounded-lg flex items-center justify-center"
+                            style={{ backgroundColor: dayAvg ? `rgba(245,158,11,${0.15 + intensity * 0.75})` : '#f8fafc', border: dayAvg ? 'none' : '1px solid #f1f5f9' }}
+                          >
+                            {dayAvg ? (
+                              <span className="text-[10px] font-black" style={{ color: '#92400e' }}>{dayAvg.toFixed(0)}</span>
+                            ) : <span className="text-slate-200 text-[9px]">—</span>}
+                          </div>
+                        )
+                      })}
+                      <div className="h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+                        <span className="text-[10px] font-black text-amber-700">{groupCargaAvg.toFixed(0)}</span>
+                      </div>
+                      <div className="h-10 rounded-lg bg-slate-50 flex items-center justify-center">
+                        <span className="text-[10px] font-black text-slate-500">
+                          {avgAcwr ? avgAcwr.toFixed(2) : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-4 text-[10px] font-bold text-slate-500">
+              <span>🌡 Cor = intensidade da carga sRPE×min do dia</span>
+              <span className="text-green-600">ACWR 0.8–1.3 = zona ideal</span>
+              <span className="text-amber-600">ACWR 1.3–1.5 = atenção</span>
+              <span className="text-red-600">ACWR &gt;1.5 = risco</span>
             </div>
           </div>
         )}
