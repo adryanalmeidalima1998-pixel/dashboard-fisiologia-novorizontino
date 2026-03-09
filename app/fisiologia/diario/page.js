@@ -6,7 +6,65 @@ import { useData, calcVmaxPct } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-function scoreColor(score) {
+function getWeekBounds(offset = 0) {
+  const today = new Date()
+  const dow = today.getDay() === 0 ? 6 : today.getDay() - 1
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - dow + offset * 7)
+  monday.setHours(0, 0, 0, 0)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  sunday.setHours(23, 59, 59, 999)
+  return { monday, sunday }
+}
+
+// ─── SEMÁFORO: score de prontidão 0–100 ──────────────────────────────────────
+// Composição: wellness (50%) + ACWR risk (30%) + dias_sem_gps (20%)
+function calcReadiness(preData, acwr, daysSinceLastGps) {
+  let score = 0
+  let reasons = []
+
+  // 1. Wellness (0–50)
+  if (preData?.wellnessScore != null) {
+    const ws = preData.wellnessScore
+    const wellPts = Math.min((ws / 5) * 50, 50)
+    score += wellPts
+    if (ws < 2.5) reasons.push('Bem-estar baixo')
+    if (preData.temDor) reasons.push('Dor relatada')
+    if (preData.corUrina >= 4) reasons.push('Desidratação')
+  } else {
+    score += 30 // sem dado → neutro
+    reasons.push('Sem check-in de bem-estar')
+  }
+
+  // 2. ACWR (0–30): zona ideal 0.8–1.3 = 30pts
+  if (acwr != null) {
+    if (acwr >= 0.8 && acwr <= 1.3) score += 30
+    else if (acwr >= 0.7 && acwr < 0.8) { score += 20; reasons.push('ACWR abaixo do ideal') }
+    else if (acwr > 1.3 && acwr <= 1.5) { score += 15; reasons.push('ACWR elevado') }
+    else if (acwr > 1.5) { score += 0; reasons.push('ACWR alto — risco de lesão') }
+    else { score += 10; reasons.push('ACWR muito baixo') }
+  } else {
+    score += 20 // sem histórico suficiente → neutro
+  }
+
+  // 3. Descanso (0–20): último GPS há 1-2 dias = ideal
+  if (daysSinceLastGps != null) {
+    if (daysSinceLastGps === 0) { score += 10; reasons.push('Treinou hoje') }
+    else if (daysSinceLastGps === 1) score += 20
+    else if (daysSinceLastGps === 2) score += 18
+    else if (daysSinceLastGps >= 3) { score += 12; reasons.push(`${daysSinceLastGps}d sem GPS`) }
+  } else {
+    score += 15
+  }
+
+  const verdict =
+    score >= 75 ? { label: 'TREINO NORMAL',    color: '#16a34a', bg: 'bg-green-50 border-green-300',  dot: 'bg-green-500',  icon: '🟢' } :
+    score >= 50 ? { label: 'TREINO MODIFICADO', color: '#d97706', bg: 'bg-amber-50 border-amber-300',  dot: 'bg-amber-500',  icon: '🟡' } :
+                  { label: 'REPOUSO SUGERIDO',  color: '#dc2626', bg: 'bg-red-50 border-red-300',      dot: 'bg-red-500',    icon: '🔴' }
+
+  return { score: Math.round(score), verdict, reasons }
+}
   if (score === null || score === undefined) return 'bg-slate-100 text-slate-400'
   if (score >= 3.5) return 'bg-green-100 text-green-700'
   if (score >= 2.5) return 'bg-amber-100 text-amber-700'
@@ -174,6 +232,7 @@ export default function DiarioDashboard() {
   const [selectedSessionId, setSelectedSessionId] = useState(null)
   const [filterAlert, setFilterAlert] = useState(false)
   const [filterPosition, setFilterPosition] = useState('')
+  const [viewMode, setViewMode] = useState('cards') // 'cards' | 'semaforo'
 
   const availablePositions = useMemo(() => {
     const set = new Set(Object.values(playerPositions).filter(Boolean))
@@ -263,6 +322,50 @@ export default function DiarioDashboard() {
       return (ws && ws < 2.5) || a.pre?.temDor || (a.pre?.corUrina >= 4)
     })
   }, [athletes])
+
+  // ── ACWR por atleta ──────────────────────────────────────────────────────────
+  const athleteAcwr = useMemo(() => {
+    const result = {}
+    const { monday: curMon, sunday: curSun } = getWeekBounds(0)
+    const allNames = athletes.map(a => a.name)
+    for (const athlete of allNames) {
+      const curLoad = bemEstarData.filter(r => {
+        if (r.playerName !== athlete || r.type !== 'post' || !r.srpeLoad) return false
+        const d = new Date(r.date + 'T12:00:00')
+        return d >= curMon && d <= curSun
+      }).reduce((s, r) => s + r.srpeLoad, 0)
+      const prevLoads = [1, 2, 3].map(w => {
+        const { monday: pm, sunday: ps } = getWeekBounds(-w)
+        return bemEstarData.filter(r => {
+          if (r.playerName !== athlete || r.type !== 'post' || !r.srpeLoad) return false
+          const d = new Date(r.date + 'T12:00:00')
+          return d >= pm && d <= ps
+        }).reduce((s, r) => s + r.srpeLoad, 0)
+      })
+      const prevAvg = prevLoads.reduce((a,b) => a+b,0) / 3
+      result[athlete] = prevAvg > 0 ? curLoad / prevAvg : null
+    }
+    return result
+  }, [bemEstarData, athletes])
+
+  // ── Readiness map ─────────────────────────────────────────────────────────────
+  const readinessMap = useMemo(() => {
+    const map = {}
+    for (const a of athletes) {
+      const lastGpsDates = gpsData
+        .filter(s => s.rows.some(r => r.playerName === a.name && r.periodNumber === 0 && !r.isOutlier))
+        .map(s => s.date)
+        .sort().reverse()
+      const lastGps = lastGpsDates[0]
+      let daysSince = null
+      if (lastGps) {
+        const d = lastGps.includes('/') ? new Date(lastGps.split('/').reverse().join('-') + 'T12:00:00') : new Date(lastGps + 'T12:00:00')
+        daysSince = Math.round((Date.now() - d.getTime()) / (1000*60*60*24))
+      }
+      map[a.name] = calcReadiness(a.pre, athleteAcwr[a.name], daysSince)
+    }
+    return map
+  }, [athletes, athleteAcwr, gpsData])
 
   const displayed = useMemo(() => {
     let list = filterAlert ? alerts : athletes
@@ -379,10 +482,110 @@ export default function DiarioDashboard() {
               {availablePositions.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           )}
+
+          {/* Toggle: Cards / Semáforo */}
+          <div className="ml-auto flex bg-slate-100 rounded-xl p-1 gap-1">
+            {[
+              { id: 'cards',    label: '🃏 Cards' },
+              { id: 'semaforo', label: '🚦 Semáforo' },
+            ].map(m => (
+              <button
+                key={m.id}
+                onClick={() => setViewMode(m.id)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${viewMode === m.id ? 'bg-amber-500 text-black shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* RESUMO DO DIA */}
-        {athletes.length > 0 && (
+        {/* ── SEMÁFORO DE PRONTIDÃO ────────────────────────────────────────────── */}
+        {viewMode === 'semaforo' && athletes.length > 0 && (
+          <div className="flex flex-col gap-4">
+            {/* KPI do semáforo */}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: '🟢 Treino Normal',    count: displayed.filter(a => readinessMap[a.name]?.score >= 75).length,   bg: 'bg-green-50 border-green-200',  text: 'text-green-700' },
+                { label: '🟡 Treino Modificado', count: displayed.filter(a => { const s = readinessMap[a.name]?.score; return s >= 50 && s < 75 }).length, bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700' },
+                { label: '🔴 Repouso Sugerido',  count: displayed.filter(a => readinessMap[a.name]?.score < 50).length,   bg: 'bg-red-50 border-red-200',      text: 'text-red-700'   },
+              ].map(k => (
+                <div key={k.label} className={`border rounded-xl p-3 ${k.bg}`}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{k.label}</p>
+                  <p className={`text-3xl font-black ${k.text}`}>{k.count}</p>
+                  <p className="text-[9px] text-slate-500">de {displayed.length} atletas</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Grade do semáforo */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+              {[...displayed]
+                .sort((a, b) => (readinessMap[b.name]?.score || 0) - (readinessMap[a.name]?.score || 0))
+                .map(a => {
+                  const r = readinessMap[a.name]
+                  if (!r) return null
+                  const barW = r.score
+                  return (
+                    <div
+                      key={a.name}
+                      onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(a.name)}`)}
+                      className={`border-2 rounded-xl p-4 cursor-pointer hover:shadow-md transition-all ${r.verdict.bg}`}
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <AthleteAvatar name={a.name} size="w-10 h-10" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-black truncate">{a.name.split(' ').slice(0,2).join(' ')}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-base">{r.verdict.icon}</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: r.verdict.color }}>
+                              {r.verdict.label}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-2xl font-black leading-none" style={{ color: r.verdict.color }}>{r.score}</p>
+                          <p className="text-[8px] text-slate-400 font-bold">/ 100</p>
+                        </div>
+                      </div>
+
+                      {/* Barra de score */}
+                      <div className="h-2 bg-white/60 rounded-full overflow-hidden mb-2">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${barW}%`, backgroundColor: r.verdict.color }}
+                        />
+                      </div>
+
+                      {/* Motivos */}
+                      {r.reasons.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {r.reasons.slice(0, 3).map((reason, i) => (
+                            <span key={i} className="text-[8px] font-black px-1.5 py-0.5 bg-white/50 rounded text-slate-600">
+                              {reason}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* ACWR badge */}
+                      {athleteAcwr[a.name] != null && (
+                        <p className="text-[9px] font-bold text-slate-500 mt-1">
+                          ACWR: <span className="font-black">{athleteAcwr[a.name].toFixed(2)}</span>
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+            </div>
+            <p className="text-[10px] font-bold text-slate-400">
+              Score = Wellness (50%) + ACWR (30%) + Dias de descanso (20%) · Clique em qualquer atleta para o perfil individual
+            </p>
+          </div>
+        )}
+
+        {/* RESUMO DO DIA — só aparece no modo cards */}
+        {viewMode === 'cards' && athletes.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Com dado hoje</p>
@@ -416,8 +619,8 @@ export default function DiarioDashboard() {
           </div>
         )}
 
-        {/* ALERTAS DESTAQUE */}
-        {alerts.length > 0 && (
+        {/* ALERTAS DESTAQUE — só no modo cards */}
+        {viewMode === 'cards' && alerts.length > 0 && (
           <div className="border-2 border-red-300 bg-red-50 rounded-xl p-4">
             <p className="text-xs font-black uppercase tracking-widest text-red-600 mb-3">⚠ Atletas que precisam de atenção hoje</p>
             <div className="flex flex-wrap gap-2">
@@ -435,8 +638,8 @@ export default function DiarioDashboard() {
           </div>
         )}
 
-        {/* GRID DE ATLETAS */}
-        {displayed.length > 0 ? (
+        {/* GRID DE ATLETAS — só no modo cards */}
+        {viewMode === 'cards' && (displayed.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {displayed.map(athlete => (
               <AthleteCard
@@ -458,7 +661,7 @@ export default function DiarioDashboard() {
             <p className="text-sm font-black text-slate-500 uppercase tracking-widest">Sem dados para esta data</p>
             <p className="text-xs text-slate-400 mt-1 font-medium">Selecione outra data ou atualize o bem-estar</p>
           </div>
-        )}
+        ))}
 
         {/* FOOTER */}
         <footer className="flex justify-between items-center border-t-2 border-slate-900 pt-3 mt-2">
