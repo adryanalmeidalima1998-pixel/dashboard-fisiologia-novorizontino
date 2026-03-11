@@ -6,7 +6,8 @@ import { useData } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
-  ResponsiveContainer, ReferenceLine, Cell, LabelList
+  ResponsiveContainer, ReferenceLine, Cell, LabelList,
+  LineChart, Line, Legend,
 } from 'recharts'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -72,7 +73,10 @@ export default function SemanalDashboard() {
   const router = useRouter()
   const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions } = useData()
   const [weekOffset, setWeekOffset] = useState(0)
-  const [activeTab, setActiveTab] = useState('carga') // 'carga' | 'gps' | 'bemEstar' | 'heatmap' | 'mediaGps'
+  const [activeTab, setActiveTab] = useState('carga')
+  const [evolucaoWeeks, setEvolucaoWeeks] = useState(12)
+  const [evolucaoAtleta, setEvolucaoAtleta] = useState('')
+  const [evolucaoMetric, setEvolucaoMetric] = useState('totalDistance')
   const [filterPosition, setFilterPosition] = useState('')
   const [isPdfLoading, setIsPdfLoading] = useState(false)
   // Ordenação das tabelas: { col, dir }
@@ -345,6 +349,89 @@ export default function SemanalDashboard() {
     return { chartData, teamAvgs, positions, n: athletesWithGps.length }
   }, [weekAthletes, gpsWeekly, playerPositions])
 
+  // ── DADOS HISTÓRICOS PARA ABA EVOLUÇÃO ───────────────────────────────────
+  const GPS_EVOLUCAO_METRICS = [
+    { key: 'totalDistance',   label: 'Distância Total', unit: 'm',     color: '#f59e0b', decimals: 0 },
+    { key: 'hsr',             label: 'HSR',             unit: 'm',     color: '#3b82f6', decimals: 0 },
+    { key: 'sprintDistance',  label: 'Sprint',          unit: 'm',     color: '#ef4444', decimals: 0 },
+    { key: 'sprintCount',     label: 'Nº Sprints',      unit: '',      color: '#8b5cf6', decimals: 0 },
+    { key: 'accDecel',        label: 'ACC+DEC',         unit: '',      color: '#f97316', decimals: 0 },
+    { key: 'avgMmin',         label: 'm/min',           unit: 'm/min', color: '#10b981', decimals: 1 },
+    { key: 'playerLoad',      label: 'Player Load',     unit: '',      color: '#06b6d4', decimals: 0 },
+    { key: 'maxVelocity',     label: 'Vmax',            unit: 'km/h',  color: '#ec4899', decimals: 1 },
+  ]
+
+  const historicalWeeks = useMemo(() => {
+    const weeks = []
+    for (let w = -(evolucaoWeeks - 1); w <= 0; w++) {
+      const { monday: wMon, sunday: wSun } = getWeekBounds(w)
+      const label = wMon.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+
+      // Sessões GPS da semana
+      const wGps = gpsData.filter(s => {
+        const dateStr = s.date || ''
+        let dt
+        if (dateStr.includes('-')) dt = new Date(dateStr + 'T12:00:00')
+        else { const [d, m, y] = dateStr.split('/'); if (!d||!m||!y) return false; dt = new Date(`${y}-${m}-${d}T12:00:00`) }
+        return dt >= wMon && dt <= wSun
+      })
+
+      // Lista de atletas da semana
+      const wAthletes = [...new Set(wGps.flatMap(s => s.rows.filter(r => r.periodNumber === 0 && !r.isOutlier).map(r => r.playerName)))]
+
+      // Médias do grupo por métrica GPS
+      const groupGps = {}
+      GPS_EVOLUCAO_METRICS.forEach(m => {
+        const vals = wAthletes.map(a => {
+          const rows = wGps.flatMap(s => s.rows.filter(r => r.playerName === a && r.periodNumber === 0 && !r.isOutlier))
+          if (!rows.length) return null
+          if (m.key === 'avgMmin') return rows.reduce((s,r) => s+(r.distanceRelative||0),0)/rows.length
+          if (m.key === 'maxVelocity') return Math.max(...rows.map(r => r.maxVelocity||0))
+          if (m.key === 'accDecel') return rows.reduce((s,r) => s+(r.acceleration||0)+(r.deceleration||0),0)
+          return rows.reduce((s,r) => s+(r[m.key]||0),0)
+        }).filter(v => v !== null && v > 0)
+        groupGps[m.key] = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null
+      })
+
+      // Dados por atleta (se modo individual)
+      const atletaGps = {}
+      wAthletes.forEach(a => {
+        const rows = wGps.flatMap(s => s.rows.filter(r => r.playerName === a && r.periodNumber === 0 && !r.isOutlier))
+        if (!rows.length) return
+        const ag = {}
+        GPS_EVOLUCAO_METRICS.forEach(m => {
+          if (m.key === 'avgMmin') ag[m.key] = rows.reduce((s,r) => s+(r.distanceRelative||0),0)/rows.length
+          else if (m.key === 'maxVelocity') ag[m.key] = Math.max(...rows.map(r => r.maxVelocity||0))
+          else if (m.key === 'accDecel') ag[m.key] = rows.reduce((s,r) => s+(r.acceleration||0)+(r.deceleration||0),0)
+          else ag[m.key] = rows.reduce((s,r) => s+(r[m.key]||0),0)
+        })
+        atletaGps[a] = ag
+      })
+
+      weeks.push({ label, weekOffset: w, groupGps, atletaGps, athleteCount: wAthletes.length, sessionCount: wGps.length })
+    }
+    return weeks
+  }, [gpsData, evolucaoWeeks])
+
+  // Lista de atletas com GPS histórico (para seletor)
+  const atletasComHistorico = useMemo(() => {
+    const set = new Set(historicalWeeks.flatMap(w => Object.keys(w.atletaGps)))
+    return Array.from(set).sort()
+  }, [historicalWeeks])
+
+  // Dados do gráfico de linha para a métrica selecionada
+  const evolucaoChartData = useMemo(() => {
+    return historicalWeeks.map(w => {
+      const point = { label: w.label, sessions: w.sessionCount, athletes: w.athleteCount }
+      if (evolucaoAtleta) {
+        point.value = w.atletaGps[evolucaoAtleta]?.[evolucaoMetric] ?? null
+      } else {
+        point.value = w.groupGps[evolucaoMetric]
+      }
+      return point
+    })
+  }, [historicalWeeks, evolucaoAtleta, evolucaoMetric])
+
   const totalLoad = weekAthletes.reduce((s, a) => s + (weekStats[a]?.weeklySum || 0), 0)
   const avgAcwr = weekAthletes.filter(a => weekStats[a]?.acwr).length > 0
     ? weekAthletes.filter(a => weekStats[a]?.acwr).reduce((s, a) => s + weekStats[a].acwr, 0) / weekAthletes.filter(a => weekStats[a]?.acwr).length
@@ -550,6 +637,7 @@ export default function SemanalDashboard() {
             { id: 'bemEstar', label: 'Bem-Estar Diário' },
             { id: 'heatmap', label: '🌡 Heatmap' },
             { id: 'mediaGps', label: '📊 Médias GPS' },
+            { id: 'evolucao', label: '📈 Evolução Semanal' },
           ].map(t => (
             <button
               key={t.id}
@@ -1147,6 +1235,284 @@ export default function SemanalDashboard() {
             )}
           </div>
         )}
+
+        {/* TAB: EVOLUÇÃO SEMANAL */}
+        {activeTab === 'evolucao' && (() => {
+          const metricObj = GPS_EVOLUCAO_METRICS.find(m => m.key === evolucaoMetric) || GPS_EVOLUCAO_METRICS[0]
+          const fmt = v => v == null ? '—' : metricObj.decimals === 1 ? v.toFixed(1) : v.toFixed(0)
+          const hasData = evolucaoChartData.some(d => d.value != null)
+
+          // Média geral do período
+          const validVals = evolucaoChartData.map(d => d.value).filter(v => v != null)
+          const periodAvg = validVals.length ? validVals.reduce((a,b)=>a+b,0)/validVals.length : null
+
+          // Tooltip customizado
+          const EvolTooltip = ({ active, payload, label }) => {
+            if (!active || !payload?.length) return null
+            const val = payload[0]?.value
+            return (
+              <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs shadow-xl">
+                <p className="font-black text-slate-700 mb-1">Semana {label}</p>
+                <p className="font-black" style={{ color: metricObj.color }}>
+                  {val != null ? fmt(val) : '—'} {metricObj.unit}
+                </p>
+                {payload[0]?.payload?.sessions > 0 && (
+                  <p className="text-slate-400 text-[10px] mt-0.5">{payload[0].payload.sessions} sessão(ões) GPS</p>
+                )}
+              </div>
+            )
+          }
+
+          return (
+            <div className="flex flex-col gap-6">
+
+              {/* CONTROLES */}
+              <div className="flex flex-wrap items-center gap-3">
+
+                {/* Seletor de métrica */}
+                <div className="flex flex-wrap gap-1">
+                  {GPS_EVOLUCAO_METRICS.map(m => (
+                    <button
+                      key={m.key}
+                      onClick={() => setEvolucaoMetric(m.key)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                        evolucaoMetric === m.key
+                          ? 'text-white shadow-md'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      }`}
+                      style={evolucaoMetric === m.key ? { backgroundColor: m.color } : {}}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  {/* Seletor de semanas */}
+                  <div className="flex gap-1">
+                    {[4, 8, 12].map(w => (
+                      <button
+                        key={w}
+                        onClick={() => setEvolucaoWeeks(w)}
+                        className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all ${
+                          evolucaoWeeks === w ? 'bg-black text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}
+                      >
+                        {w}sem
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Seletor de atleta */}
+                  <select
+                    value={evolucaoAtleta}
+                    onChange={e => setEvolucaoAtleta(e.target.value)}
+                    className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-black bg-white text-slate-700 focus:border-amber-400 focus:outline-none"
+                  >
+                    <option value="">📊 Média do Grupo</option>
+                    {atletasComHistorico.map(a => (
+                      <option key={a} value={a}>{a.split(' ').slice(0,2).join(' ')}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* KPIs do período */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Média do Período</p>
+                  <p className="text-2xl font-black" style={{ color: metricObj.color }}>
+                    {periodAvg != null ? fmt(periodAvg) : '—'}
+                    <span className="text-xs font-bold text-slate-400 ml-1">{metricObj.unit}</span>
+                  </p>
+                  <p className="text-[9px] text-slate-400 font-bold">{evolucaoWeeks} semanas</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Melhor Semana</p>
+                  {(() => {
+                    const best = evolucaoChartData.reduce((b, d) => (d.value != null && (b == null || d.value > b.value)) ? d : b, null)
+                    return best ? (
+                      <>
+                        <p className="text-2xl font-black text-green-600">{fmt(best.value)}<span className="text-xs font-bold text-slate-400 ml-1">{metricObj.unit}</span></p>
+                        <p className="text-[9px] text-slate-400 font-bold">Semana de {best.label}</p>
+                      </>
+                    ) : <p className="text-2xl font-black text-slate-300">—</p>
+                  })()}
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Tendência (últimas 4 sem.)</p>
+                  {(() => {
+                    const last4 = evolucaoChartData.slice(-4).filter(d => d.value != null)
+                    if (last4.length < 2) return <p className="text-2xl font-black text-slate-300">—</p>
+                    const first2avg = last4.slice(0, 2).reduce((s,d)=>s+d.value,0)/2
+                    const last2avg = last4.slice(-2).reduce((s,d)=>s+d.value,0)/2
+                    const delta = last2avg - first2avg
+                    const pct = first2avg > 0 ? (delta / first2avg) * 100 : 0
+                    const isUp = delta >= 0
+                    return (
+                      <>
+                        <p className={`text-2xl font-black ${isUp ? 'text-green-600' : 'text-red-500'}`}>
+                          {isUp ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}%
+                        </p>
+                        <p className="text-[9px] text-slate-400 font-bold">{isUp ? 'Alta' : 'Queda'} vs. início do período</p>
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+
+              {/* GRÁFICO PRINCIPAL */}
+              <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      {evolucaoAtleta ? evolucaoAtleta.split(' ').slice(0,2).join(' ') : 'Média do Grupo'}
+                    </p>
+                    <h2 className="text-xl font-black text-black uppercase leading-none">{metricObj.label} — Semana a Semana</h2>
+                  </div>
+                  <div className="w-3 h-3 rounded-full mt-2" style={{ backgroundColor: metricObj.color }} />
+                </div>
+
+                {!hasData ? (
+                  <div className="flex items-center justify-center h-64 text-slate-300 font-medium text-sm">
+                    Sem dados GPS no período selecionado
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <LineChart data={evolucaoChartData} margin={{ top: 10, right: 20, bottom: 10, left: -10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 9, fontWeight: 'bold', fill: '#94a3b8' }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval={evolucaoWeeks <= 4 ? 0 : evolucaoWeeks <= 8 ? 1 : 2}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 9, fill: '#94a3b8' }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={v => metricObj.decimals === 1 ? v.toFixed(1) : v.toFixed(0)}
+                        domain={['auto', 'auto']}
+                      />
+                      <RTooltip content={<EvolTooltip />} />
+                      {periodAvg != null && (
+                        <ReferenceLine
+                          y={periodAvg}
+                          stroke={metricObj.color}
+                          strokeDasharray="5 3"
+                          strokeWidth={1.5}
+                          label={{ value: `Média ${fmt(periodAvg)}`, position: 'insideTopRight', fontSize: 9, fill: metricObj.color, fontWeight: 'bold' }}
+                        />
+                      )}
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke={metricObj.color}
+                        strokeWidth={2.5}
+                        dot={(props) => {
+                          const { cx, cy, payload } = props
+                          if (payload.value == null) return null
+                          return <circle key={payload.label} cx={cx} cy={cy} r={4} fill={metricObj.color} stroke="white" strokeWidth={2} />
+                        }}
+                        activeDot={{ r: 6, fill: metricObj.color, stroke: 'white', strokeWidth: 2 }}
+                        connectNulls={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
+              {/* GRADE: TODAS AS MÉTRICAS — visão de grupo */}
+              {!evolucaoAtleta && (
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">Todas as Métricas — Média do Grupo</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {GPS_EVOLUCAO_METRICS.map(m => {
+                      const vals = historicalWeeks.map(w => ({ label: w.label, value: w.groupGps[m.key] }))
+                      const hasVals = vals.some(v => v.value != null)
+                      const avg = (() => {
+                        const v2 = vals.map(v=>v.value).filter(v=>v!=null)
+                        return v2.length ? v2.reduce((a,b)=>a+b,0)/v2.length : null
+                      })()
+                      const fmtM = v => v == null ? '—' : m.decimals === 1 ? v.toFixed(1) : v.toFixed(0)
+                      return (
+                        <div
+                          key={m.key}
+                          className={`bg-white border rounded-xl p-3 cursor-pointer transition-all hover:shadow-md ${evolucaoMetric === m.key ? 'border-2 shadow-md' : 'border-slate-100'}`}
+                          style={evolucaoMetric === m.key ? { borderColor: m.color } : {}}
+                          onClick={() => setEvolucaoMetric(m.key)}
+                        >
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{m.label}</p>
+                          <p className="text-lg font-black" style={{ color: m.color }}>
+                            {fmtM(avg)}<span className="text-[10px] font-bold text-slate-400 ml-1">{m.unit}</span>
+                          </p>
+                          {hasVals && (
+                            <div className="mt-1.5 h-8">
+                              <ResponsiveContainer width="100%" height={32}>
+                                <LineChart data={vals} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                                  <Line type="monotone" dataKey="value" stroke={m.color} strokeWidth={1.5} dot={false} connectNulls={false} />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* GRADE: visão por atleta com mini-sparklines */}
+              {evolucaoAtleta && (
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-3">
+                    {evolucaoAtleta.split(' ').slice(0,2).join(' ')} — Todas as Métricas
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {GPS_EVOLUCAO_METRICS.map(m => {
+                      const vals = historicalWeeks.map(w => ({ label: w.label, value: w.atletaGps[evolucaoAtleta]?.[m.key] ?? null }))
+                      const hasVals = vals.some(v => v.value != null)
+                      const avg = (() => {
+                        const v2 = vals.map(v=>v.value).filter(v=>v!=null)
+                        return v2.length ? v2.reduce((a,b)=>a+b,0)/v2.length : null
+                      })()
+                      const fmtM = v => v == null ? '—' : m.decimals === 1 ? v.toFixed(1) : v.toFixed(0)
+                      return (
+                        <div
+                          key={m.key}
+                          className={`bg-white border rounded-xl p-3 cursor-pointer transition-all hover:shadow-md ${evolucaoMetric === m.key ? 'border-2 shadow-md' : 'border-slate-100'}`}
+                          style={evolucaoMetric === m.key ? { borderColor: m.color } : {}}
+                          onClick={() => setEvolucaoMetric(m.key)}
+                        >
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{m.label}</p>
+                          <p className="text-lg font-black" style={{ color: m.color }}>
+                            {fmtM(avg)}<span className="text-[10px] font-bold text-slate-400 ml-1">{m.unit}</span>
+                          </p>
+                          {hasVals && (
+                            <div className="mt-1.5 h-8">
+                              <ResponsiveContainer width="100%" height={32}>
+                                <LineChart data={vals} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                                  <Line type="monotone" dataKey="value" stroke={m.color} strokeWidth={1.5} dot={false} connectNulls={false} />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-4 text-[10px] font-bold text-slate-500 border-t border-slate-100 pt-3">
+                <span>📈 Clique nas métricas para trocar o gráfico principal</span>
+                <span>— — Linha tracejada = média do período selecionado</span>
+                <span>Pontos ausentes = semanas sem sessão GPS registrada</span>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* FOOTER */}
         <footer className="flex justify-between items-center border-t-2 border-slate-900 pt-3 mt-2">
