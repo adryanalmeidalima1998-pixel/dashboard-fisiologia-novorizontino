@@ -6,8 +6,35 @@ import { useEffect, useState, useMemo } from 'react'
 
 const PERIOD_LABELS = { manha: '🌅 Manhã', tarde: '☀️ Tarde', noite: '🌙 Noite' }
 const RESULT_LABELS = { V: '✅ Vitória', E: '🟡 Empate', D: '❌ Derrota' }
-
 const EMPTY_META = { sessionType: 'treino', sessionPeriod: 'tarde', opponent: '', result: '' }
+
+// ── Cópia local do calcReadiness (mesma lógica do Dashboard Diário) ────────────
+function calcReadiness(preData, acwr, daysSinceLastGps) {
+  let score = 0
+  if (preData?.wellnessScore != null) {
+    score += Math.min((preData.wellnessScore / 5) * 50, 50)
+  } else {
+    score += 30
+  }
+  if (acwr != null) {
+    if (acwr >= 0.8 && acwr <= 1.3) score += 30
+    else if (acwr >= 0.7 && acwr < 0.8) score += 20
+    else if (acwr > 1.3 && acwr <= 1.5) score += 15
+    else if (acwr > 1.5) score += 0
+    else score += 10
+  } else {
+    score += 20
+  }
+  if (daysSinceLastGps != null) {
+    if (daysSinceLastGps === 0) score += 10
+    else if (daysSinceLastGps === 1) score += 20
+    else if (daysSinceLastGps === 2) score += 18
+    else score += 12
+  } else {
+    score += 15
+  }
+  return Math.round(score)
+}
 
 export default function Fisiologia() {
   const router = useRouter()
@@ -59,6 +86,50 @@ export default function Fisiologia() {
     if (!gpsNames.length || !bemNames.length) return []
     return suggestNameMatches(gpsNames, bemNames, nameAliases)
   }, [gpsNames, bemNames, nameAliases])
+
+  // ── PRONTIDÃO DA EQUIPE HOJE ──────────────────────────────────────────────────
+  // Calcula score de prontidão para cada atleta com bem-estar de hoje
+  const teamReadiness = useMemo(() => {
+    if (!bemEstarData.length) return null
+    const todayStr = new Date().toISOString().split('T')[0]
+    const todayPre = {}
+    for (const r of bemEstarData) {
+      if (r.date === todayStr && r.type === 'pre') todayPre[r.playerName] = r
+    }
+    if (Object.keys(todayPre).length === 0) return null
+
+    const scores = Object.entries(todayPre).map(([name, preData]) => {
+      // ACWR simples: carga semana atual / média 3 semanas anteriores
+      const today = new Date()
+      const dow = today.getDay() === 0 ? 6 : today.getDay() - 1
+      const monday = new Date(today); monday.setDate(today.getDate() - dow); monday.setHours(0,0,0,0)
+      const curLoad = bemEstarData.filter(r => r.playerName === name && r.type === 'post' && r.srpeLoad && new Date(r.date + 'T12:00:00') >= monday).reduce((s,r) => s + r.srpeLoad, 0)
+      const prevLoads = [1,2,3].map(w => {
+        const pm = new Date(monday); pm.setDate(monday.getDate() - w * 7)
+        const ps = new Date(pm); ps.setDate(pm.getDate() + 6); ps.setHours(23,59,59,999)
+        return bemEstarData.filter(r => r.playerName === name && r.type === 'post' && r.srpeLoad && new Date(r.date+'T12:00:00') >= pm && new Date(r.date+'T12:00:00') <= ps).reduce((s,r) => s+r.srpeLoad,0)
+      })
+      const prevAvg = prevLoads.reduce((a,b) => a+b,0) / 3
+      const acwr = prevAvg > 0 ? curLoad / prevAvg : null
+
+      // Dias desde último GPS
+      const lastGpsDates = gpsData.flatMap(s => s.rows.filter(r => r.playerName === name && r.periodNumber === 0 && !r.isOutlier).map(() => s.date)).sort().reverse()
+      const lastGps = lastGpsDates[0]
+      let daysSince = null
+      if (lastGps) {
+        const d = lastGps.includes('/') ? new Date(lastGps.split('/').reverse().join('-')+'T12:00:00') : new Date(lastGps+'T12:00:00')
+        daysSince = Math.round((Date.now() - d.getTime()) / (1000*60*60*24))
+      }
+
+      return { name, score: calcReadiness(preData, acwr, daysSince) }
+    })
+
+    const avg = Math.round(scores.reduce((s, a) => s + a.score, 0) / scores.length)
+    const green  = scores.filter(a => a.score >= 75).length
+    const yellow = scores.filter(a => a.score >= 50 && a.score < 75).length
+    const red    = scores.filter(a => a.score < 50).length
+    return { avg, green, yellow, red, total: scores.length }
+  }, [bemEstarData, gpsData])
 
   function handleFilesSelect(files) {
     if (!files || files.length === 0) return
@@ -826,6 +897,62 @@ export default function Fisiologia() {
                 >
                   Fechar
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* KPI PRONTIDÃO DA EQUIPE HOJE */}
+        {teamReadiness && (
+          <div
+            className="border-2 border-slate-200 rounded-2xl p-4 cursor-pointer hover:border-amber-400 transition-all"
+            onClick={() => router.push('/fisiologia/diario')}
+          >
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              {/* Score principal */}
+              <div className="flex items-center gap-4">
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black flex-shrink-0 ${
+                  teamReadiness.avg >= 75 ? 'bg-green-100 text-green-700 border-2 border-green-300' :
+                  teamReadiness.avg >= 50 ? 'bg-amber-100 text-amber-700 border-2 border-amber-300' :
+                  'bg-red-100 text-red-700 border-2 border-red-300'
+                }`}>
+                  {teamReadiness.avg}
+                </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Prontidão da Equipe — Hoje</p>
+                  <p className="text-xl font-black text-black leading-tight">
+                    {teamReadiness.avg >= 75 ? 'Treino Normal' : teamReadiness.avg >= 50 ? 'Treino Modificado' : 'Repouso Sugerido'}
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                    Baseado em {teamReadiness.total} check-in{teamReadiness.total !== 1 ? 's' : ''} de hoje · score 0–100
+                  </p>
+                </div>
+              </div>
+
+              {/* Distribuição */}
+              <div className="flex items-center gap-3">
+                {/* Barra de distribuição */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex h-3 rounded-full overflow-hidden w-48 bg-slate-100">
+                    {teamReadiness.green > 0 && (
+                      <div className="bg-green-500 h-full transition-all" style={{ width: `${(teamReadiness.green / teamReadiness.total) * 100}%` }} />
+                    )}
+                    {teamReadiness.yellow > 0 && (
+                      <div className="bg-amber-400 h-full transition-all" style={{ width: `${(teamReadiness.yellow / teamReadiness.total) * 100}%` }} />
+                    )}
+                    {teamReadiness.red > 0 && (
+                      <div className="bg-red-500 h-full transition-all" style={{ width: `${(teamReadiness.red / teamReadiness.total) * 100}%` }} />
+                    )}
+                  </div>
+                  <div className="flex justify-between text-[9px] font-black w-48">
+                    <span className="text-green-600">{teamReadiness.green} normal</span>
+                    <span className="text-amber-600">{teamReadiness.yellow} modif.</span>
+                    <span className="text-red-600">{teamReadiness.red} repouso</span>
+                  </div>
+                </div>
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  Ver detalhes →
+                </div>
               </div>
             </div>
           </div>
