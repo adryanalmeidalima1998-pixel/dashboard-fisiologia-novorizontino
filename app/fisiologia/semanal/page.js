@@ -34,7 +34,6 @@ const ANATOMY_POINTS = {
   'H':  { x: 395, y: 322 }, 'G':  { x: 355, y: 322 }, '9':  { x: 393, y: 362 },
   '10': { x: 357, y: 362 }, 'J':  { x: 393, y: 400 }, 'I':  { x: 357, y: 400 },
 }
-import { AthleteAvatar } from '../../utils/athletePhotos'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
   ResponsiveContainer, ReferenceLine, Cell, LabelList,
