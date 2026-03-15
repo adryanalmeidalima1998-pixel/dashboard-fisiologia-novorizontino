@@ -4,6 +4,37 @@ import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import { useData } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
+
+// ─── CONSTANTES DE DOR (mesmas do perfil Individual) ──────────────────────────
+const DOR_LABELS = {
+  '1': 'Anterior Coxa D', '2': 'Anterior Coxa E', '3': 'Adutor Coxa D', '4': 'Adutor Coxa E',
+  '5': 'Tibial Ant. D', '6': 'Tibial Ant. E', '7': 'Post. Coxa D', '8': 'Post. Coxa E',
+  '9': 'Panturrilha D', '10': 'Panturrilha E', '11': 'Glúteo E', '12': 'Glúteo D',
+  '13': 'Flex. Quadril D', '14': 'Flex. Quadril E', '15': 'Peitoral D', '16': 'Peitoral E',
+  '17': 'Dorso E', '18': 'Dorso D', '19': 'Bíceps D', '20': 'Bíceps E',
+  '21': 'Tríceps E', '22': 'Tríceps D',
+  'A': 'Abdome', 'B': 'Joelho Ant. D', 'C': 'Joelho Ant. E', 'D': 'Tornozelo D', 'E': 'Tornozelo E',
+  'F': 'Lombar', 'G': 'Joelho Post. E', 'H': 'Joelho Post. D', 'I': 'Tendão Calc. E', 'J': 'Tendão Calc. D',
+  'L': 'Deltoide D', 'M': 'Deltoide E', 'N': 'Punho D', 'O': 'Punho E',
+  'P': 'Cervical', 'Q': 'Cotovelo E', 'R': 'Cotovelo D',
+}
+
+const ANATOMY_POINTS = {
+  'P':  { x: 125, y: 66  }, 'L':  { x: 174, y: 88  }, 'M':  { x: 76,  y: 88  },
+  '15': { x: 147, y: 118 }, '16': { x: 103, y: 118 }, 'A':  { x: 125, y: 155 },
+  '19': { x: 198, y: 116 }, '20': { x: 52,  y: 116 }, 'R':  { x: 204, y: 160 },
+  'Q':  { x: 46,  y: 160 }, 'N':  { x: 202, y: 202 }, 'O':  { x: 48,  y: 202 },
+  '13': { x: 143, y: 213 }, '14': { x: 107, y: 213 }, '1':  { x: 143, y: 268 },
+  '2':  { x: 107, y: 268 }, '3':  { x: 136, y: 255 }, '4':  { x: 114, y: 255 },
+  'B':  { x: 145, y: 322 }, 'C':  { x: 105, y: 322 }, '5':  { x: 144, y: 362 },
+  '6':  { x: 106, y: 362 }, 'D':  { x: 145, y: 400 }, 'E':  { x: 105, y: 400 },
+  '18': { x: 395, y: 118 }, '17': { x: 355, y: 118 }, 'F':  { x: 375, y: 165 },
+  '22': { x: 449, y: 116 }, '21': { x: 301, y: 116 }, '12': { x: 393, y: 213 },
+  '11': { x: 357, y: 213 }, '7':  { x: 393, y: 268 }, '8':  { x: 357, y: 268 },
+  'H':  { x: 395, y: 322 }, 'G':  { x: 355, y: 322 }, '9':  { x: 393, y: 362 },
+  '10': { x: 357, y: 362 }, 'J':  { x: 393, y: 400 }, 'I':  { x: 357, y: 400 },
+}
+import { AthleteAvatar } from '../../utils/athletePhotos'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
   ResponsiveContainer, ReferenceLine, Cell, LabelList,
@@ -84,6 +115,7 @@ export default function SemanalDashboard() {
   const [sortCarga, setSortCarga] = useState({ col: 'total', dir: 'desc' })
   const [sortGps, setSortGps] = useState({ col: 'totalDistance', dir: 'desc' })
   const [sortBem, setSortBem] = useState({ col: 'avg', dir: 'desc' })
+  const [hoveredPainRegion, setHoveredPainRegion] = useState(null)
   // Atletas excluídos da média do grupo (DM, goleiro no profissional, erro GPS, etc.)
   // Persiste no localStorage por semana: chave "excluded_YYYY-WW"
   function getWeekKey(offset) {
@@ -157,6 +189,61 @@ export default function SemanalDashboard() {
       return d >= monday && d <= sunday
     })
   }, [bemEstarData, monday, sunday])
+
+  // ── DOR COLETIVA DA SEMANA ────────────────────────────────────────────────────
+  // Agrega incidências de dor de todos os atletas no período selecionado
+  const teamPainMap = useMemo(() => {
+    const map = {}
+    for (const r of weekBemEstar) {
+      if (!r.temDor || !r.dorLocalizada) continue
+      const parts = r.dorLocalizada.split(',').map(p => p.trim())
+      for (const part of parts) {
+        if (!part || part === '0 - Sem dor') continue
+        const code = part.split(' - ')[0].trim()
+        if (ANATOMY_POINTS[code]) {
+          map[code] = (map[code] || 0) + 1
+        } else {
+          for (const [k, v] of Object.entries(DOR_LABELS)) {
+            if (part.toLowerCase().includes(v.toLowerCase()) || v.toLowerCase().includes(part.toLowerCase())) {
+              map[k] = (map[k] || 0) + 1; break
+            }
+          }
+        }
+      }
+    }
+    return map
+  }, [weekBemEstar])
+
+  // Ranking das regiões mais afetadas
+  const teamPainFrequency = useMemo(() => {
+    return Object.entries(teamPainMap)
+      .map(([code, count]) => ({ code, count, label: DOR_LABELS[code] || code }))
+      .sort((a, b) => b.count - a.count)
+  }, [teamPainMap])
+
+  // Atletas com dor na semana, por região
+  const teamPainByAthlete = useMemo(() => {
+    const byRegion = {}
+    for (const r of weekBemEstar) {
+      if (!r.temDor || !r.dorLocalizada) continue
+      const parts = r.dorLocalizada.split(',').map(p => p.trim())
+      for (const part of parts) {
+        if (!part || part === '0 - Sem dor') continue
+        const code = part.split(' - ')[0].trim()
+        const resolvedCode = ANATOMY_POINTS[code] ? code : (() => {
+          for (const [k, v] of Object.entries(DOR_LABELS)) {
+            if (part.toLowerCase().includes(v.toLowerCase())) return k
+          }
+          return null
+        })()
+        if (resolvedCode) {
+          if (!byRegion[resolvedCode]) byRegion[resolvedCode] = []
+          if (!byRegion[resolvedCode].includes(r.playerName)) byRegion[resolvedCode].push(r.playerName)
+        }
+      }
+    }
+    return byRegion
+  }, [weekBemEstar])
 
   // Dados GPS da semana
   const weekGps = useMemo(() => {
@@ -714,6 +801,7 @@ export default function SemanalDashboard() {
             { id: 'heatmap', label: '🌡 Heatmap' },
             { id: 'mediaGps', label: '📊 Médias GPS' },
             { id: 'evolucao', label: '📈 Evolução Semanal' },
+            { id: 'dor', label: '🩺 Dor da Equipe' },
           ].map(t => (
             <button
               key={t.id}
@@ -1676,6 +1764,205 @@ export default function SemanalDashboard() {
                 <span>📈 Clique nas métricas para trocar o gráfico principal</span>
                 <span>— — Linha tracejada = média do período selecionado</span>
                 <span>Pontos ausentes = semanas sem sessão GPS registrada</span>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* TAB: DOR DA EQUIPE */}
+        {activeTab === 'dor' && (() => {
+          const maxCount = Math.max(...Object.values(teamPainMap), 1)
+          const totalReports = weekBemEstar.filter(r => r.temDor).length
+          const athletesWithPain = [...new Set(weekBemEstar.filter(r => r.temDor).map(r => r.playerName))]
+
+          function dotColor(code) {
+            const c = teamPainMap[code]; if (!c) return null
+            const i = c / maxCount
+            return i > 0.66 ? '#dc2626' : i > 0.33 ? '#f97316' : '#fbbf24'
+          }
+
+          // Inline body SVG (frente + costas, sem BodyShape component)
+          function BodyOutline({ cx }) {
+            return (
+              <g>
+                <circle cx={cx} cy={36} r={22} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.5"/>
+                <ellipse cx={cx-23} cy={38} rx={5} ry={8} fill="#d0d9e8" stroke="#8fa3be" strokeWidth="1"/>
+                <ellipse cx={cx+23} cy={38} rx={5} ry={8} fill="#d0d9e8" stroke="#8fa3be" strokeWidth="1"/>
+                <path d={`M ${cx-8} 57 C ${cx-8} 57 ${cx-6} 72 ${cx-6} 74 L ${cx+6} 74 C ${cx+6} 72 ${cx+8} 57 ${cx+8} 57 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1"/>
+                <path d={`M ${cx-8} 73 C ${cx-28} 74 ${cx-54} 90 ${cx-52} 132 L ${cx-42} 158 C ${cx-38} 172 ${cx-40} 190 ${cx-42} 208 L ${cx+42} 208 C ${cx+40} 190 ${cx+38} 172 ${cx+42} 158 L ${cx+52} 132 C ${cx+58} 104 ${cx+28} 74 ${cx+8} 73 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.5"/>
+                <path d={`M ${cx+42} 84 C ${cx+68} 94 ${cx+76} 112 ${cx+82} 148 L ${cx+74} 172 L ${cx+64} 172 C ${cx+68} 154 ${cx+62} 108 ${cx+36} 84 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+                <path d={`M ${cx+74} 172 L ${cx+64} 172 C ${cx+70} 210 ${cx+76} 237 ${cx+80} 237 C ${cx+84} 237 ${cx+88} 224 ${cx+84} 186 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+                <path d={`M ${cx-42} 84 C ${cx-68} 94 ${cx-76} 112 ${cx-82} 148 L ${cx-74} 172 L ${cx-64} 172 C ${cx-68} 154 ${cx-62} 108 ${cx-36} 84 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+                <path d={`M ${cx-74} 172 L ${cx-64} 172 C ${cx-70} 210 ${cx-76} 237 ${cx-80} 237 C ${cx-84} 237 ${cx-88} 224 ${cx-84} 186 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+                <path d={`M ${cx-42} 207 C ${cx-42} 218 ${cx-40} 230 ${cx-36} 236 L ${cx+36} 236 C ${cx+40} 230 ${cx+42} 218 ${cx+42} 207 Z`} fill="#d4dce9" stroke="#8fa3be" strokeWidth="1.2"/>
+                <path d={`M ${cx-36} 234 C ${cx-10} 232 ${cx-8} 234 C ${cx-6} 288 ${cx-34} 316 C ${cx-32} 322 ${cx-26} 326 ${cx-22} 326 C ${cx-18} 326 ${cx-12} 322 ${cx-10} 316 C ${cx-10} 288 ${cx-10} 262 ${cx-36} 234 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+                <path d={`M ${cx+8} 234 C ${cx+24} 232 ${cx+36} 234 C ${cx+36} 262 ${cx+34} 316 C ${cx+32} 322 ${cx+26} 326 ${cx+22} 326 C ${cx+18} 326 ${cx+12} 322 ${cx+10} 316 C ${cx+6} 262 ${cx+8} 234 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+                <ellipse cx={cx-22} cy={327} rx={14} ry={10} fill="#c8d5e5" stroke="#8fa3be" strokeWidth="1"/>
+                <ellipse cx={cx+22} cy={327} rx={14} ry={10} fill="#c8d5e5" stroke="#8fa3be" strokeWidth="1"/>
+                <path d={`M ${cx-36} 336 C ${cx-36} 372 ${cx-18} 398 ${cx-18} 398 C ${cx-14} 398 ${cx-10} 394 ${cx-12} 386 C ${cx-10} 352 ${cx-10} 336 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+                <path d={`M ${cx+10} 336 C ${cx+10} 352 ${cx+12} 386 ${cx+10} 394 ${cx+14} 398 ${cx+18} 398 C ${cx+28} 386 ${cx+36} 352 ${cx+36} 336 Z`} fill="#dde4ef" stroke="#8fa3be" strokeWidth="1.2"/>
+                <ellipse cx={cx-20} cy={402} rx={16} ry={8} fill="#c8d5e5" stroke="#8fa3be" strokeWidth="1"/>
+                <ellipse cx={cx+20} cy={402} rx={16} ry={8} fill="#c8d5e5" stroke="#8fa3be" strokeWidth="1"/>
+              </g>
+            )
+          }
+
+          return (
+            <div className="flex flex-col gap-5">
+              {/* KPIs */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className={`border-2 rounded-xl p-3 ${totalReports > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Relatos de dor</p>
+                  <p className={`text-2xl font-black ${totalReports > 0 ? 'text-orange-600' : 'text-green-600'}`}>{totalReports}</p>
+                  <p className="text-[10px] text-slate-500">na semana</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Atletas afetados</p>
+                  <p className="text-2xl font-black text-black">{athletesWithPain.length}</p>
+                  <p className="text-[10px] text-slate-500">de {weekAthletes.length} na semana</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Regiões distintas</p>
+                  <p className="text-2xl font-black text-black">{Object.keys(teamPainMap).length}</p>
+                  <p className="text-[10px] text-slate-500">afetadas na equipe</p>
+                </div>
+                <div className={`border-2 rounded-xl p-3 ${teamPainFrequency[0]?.count > 2 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Mais recorrente</p>
+                  <p className={`text-sm font-black leading-tight ${teamPainFrequency[0]?.count > 2 ? 'text-red-600' : 'text-black'}`}>
+                    {teamPainFrequency[0]?.label ?? '—'}
+                  </p>
+                  {teamPainFrequency[0] && <p className="text-[10px] text-slate-500 mt-0.5">{teamPainFrequency[0].count}× relatado</p>}
+                </div>
+              </div>
+
+              {teamPainFrequency.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+                  <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm font-medium">Nenhuma dor relatada nesta semana</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                  {/* Mapa anatômico coletivo */}
+                  <div className="border border-slate-200 rounded-xl p-4">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Mapa de Dor — Equipe</p>
+                    <div className="flex justify-around text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 px-4">
+                      <span>FRENTE</span><span>COSTAS</span>
+                    </div>
+                    <svg viewBox="0 0 500 430" className="w-full max-w-sm mx-auto block" style={{ maxHeight: 340 }}>
+                      <BodyOutline cx={125} />
+                      <line x1="250" y1="0" x2="250" y2="430" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="5,3" />
+                      <BodyOutline cx={375} />
+                      {/* Linha de coluna nas costas */}
+                      <path d={`M 375 74 L 375 208`} stroke="#a0b3cc" strokeWidth="1" strokeDasharray="3,3"/>
+                      {Object.entries(ANATOMY_POINTS).map(([code, pos]) => {
+                        const color = dotColor(code)
+                        const count = teamPainMap[code] || 0
+                        const isHov = hoveredPainRegion === code
+                        if (!color && !isHov) return null
+                        return (
+                          <g key={code}
+                            onMouseEnter={() => setHoveredPainRegion(code)}
+                            onMouseLeave={() => setHoveredPainRegion(null)}
+                            style={{ cursor: 'pointer' }}>
+                            {(color || isHov) && (
+                              <circle cx={pos.x} cy={pos.y} r={isHov ? 14 : 10}
+                                fill={color || '#fbbf24'} fillOpacity={0.2} />
+                            )}
+                            <circle cx={pos.x} cy={pos.y} r={isHov ? 9 : 6}
+                              fill={color || '#fbbf24'} fillOpacity={color ? 0.92 : 0.5}
+                              stroke="white" strokeWidth="1.5" />
+                            {count > 1 && (
+                              <text x={pos.x} y={pos.y + 4} textAnchor="middle" fontSize="7" fontWeight="bold" fill="white">{count}</text>
+                            )}
+                            {isHov && (
+                              <g>
+                                <rect x={pos.x - 40} y={pos.y - 28} width="80" height="18" rx="4" fill="rgba(15,23,42,0.85)"/>
+                                <text x={pos.x} y={pos.y - 16} textAnchor="middle" fontSize="9" fontWeight="bold" fill="white">
+                                  {DOR_LABELS[code] || code} ({count}×)
+                                </text>
+                              </g>
+                            )}
+                          </g>
+                        )
+                      })}
+                    </svg>
+                    <div className="flex items-center justify-center gap-4 mt-2">
+                      {[['bg-amber-400','1×'],['bg-orange-500','Frequente'],['bg-red-600','Recorrente']].map(([bg, lbl]) => (
+                        <div key={lbl} className="flex items-center gap-1">
+                          <span className={`w-3 h-3 rounded-full ${bg} inline-block`} />
+                          <span className="text-[9px] font-black text-slate-500 uppercase">{lbl}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Ranking de regiões + atletas afetados */}
+                  <div className="flex flex-col gap-4">
+                    <div className="border border-slate-200 rounded-xl p-4">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Regiões mais afetadas</p>
+                      <div className="flex flex-col gap-2">
+                        {teamPainFrequency.slice(0, 10).map(({ code, count, label }) => {
+                          const intensity = count / maxCount
+                          const barColor = intensity > 0.66 ? 'bg-red-500' : intensity > 0.33 ? 'bg-orange-400' : 'bg-amber-300'
+                          const textColor = intensity > 0.66 ? 'text-red-600' : intensity > 0.33 ? 'text-orange-500' : 'text-amber-600'
+                          const athletes = teamPainByAthlete[code] || []
+                          return (
+                            <div key={code}
+                              className={`flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors cursor-pointer ${hoveredPainRegion === code ? 'bg-amber-50' : ''}`}
+                              onMouseEnter={() => setHoveredPainRegion(code)}
+                              onMouseLeave={() => setHoveredPainRegion(null)}>
+                              <span className="text-[10px] font-black text-slate-400 w-5 text-right shrink-0">{code}</span>
+                              <span className="text-xs font-bold w-32 shrink-0 truncate">{label}</span>
+                              <div className="flex-1 bg-slate-100 rounded-full h-2">
+                                <div className={`${barColor} h-2 rounded-full`} style={{ width: `${(count / maxCount) * 100}%` }} />
+                              </div>
+                              <span className={`text-xs font-black w-6 text-right ${textColor}`}>{count}×</span>
+                              <div className="flex -space-x-1 ml-1">
+                                {athletes.slice(0, 4).map(name => (
+                                  <AthleteAvatar key={name} name={name} size="w-5 h-5" className="ring-1 ring-white" />
+                                ))}
+                                {athletes.length > 4 && (
+                                  <span className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-black text-slate-500 ring-1 ring-white">+{athletes.length - 4}</span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Atletas com dor */}
+                    {athletesWithPain.length > 0 && (
+                      <div className="border border-slate-200 rounded-xl p-4">
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Atletas com dor na semana</p>
+                        <div className="flex flex-wrap gap-2">
+                          {athletesWithPain.map(name => {
+                            const reports = weekBemEstar.filter(r => r.playerName === name && r.temDor)
+                            return (
+                              <div key={name} className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2"
+                                onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(name)}`)}>
+                                <AthleteAvatar name={name} size="w-7 h-7" />
+                                <div>
+                                  <p className="text-xs font-black text-slate-700">{name.split(' ').slice(0,2).join(' ')}</p>
+                                  <p className="text-[9px] text-orange-600 font-bold">{reports.length}× relatado</p>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-4 text-[10px] font-bold text-slate-500">
+                <span>Passe o mouse sobre o mapa ou a lista para destacar a região</span>
+                <span className="text-amber-600">Âmbar = 1 relato · Laranja = frequente · Vermelho = recorrente</span>
+                <span>Clique em um atleta para ver o perfil individual</span>
               </div>
             </div>
           )
