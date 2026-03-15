@@ -160,6 +160,7 @@ export default function DestaquesDashboard() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [selectedMetricKey, setSelectedMetricKey] = useState('totalDistance')
   const [topN] = useState(5)
+  const [sessionTypeFilter, setSessionTypeFilter] = useState('todos') // 'todos' | 'treino' | 'jogo'
 
   // ── Sessões disponíveis ────────────────────────────────────────────────────
   const sessionOptions = useMemo(() => [...gpsData].reverse(), [gpsData])
@@ -184,9 +185,12 @@ export default function DestaquesDashboard() {
         if (!d || !m || !y) return false
         dt = new Date(`${y}-${m}-${d}T12:00:00`)
       }
-      return dt >= monday && dt <= sunday
+      if (!(dt >= monday && dt <= sunday)) return false
+      if (sessionTypeFilter === 'todos') return true
+      const t = s.metadata?.sessionType || s.metadata?.type || ''
+      return t === sessionTypeFilter
     })
-  }, [gpsData, monday, sunday])
+  }, [gpsData, monday, sunday, sessionTypeFilter])
 
   // ── Dados de atletas para o contexto selecionado ───────────────────────────
   const athleteRows = useMemo(() => {
@@ -268,6 +272,9 @@ export default function DestaquesDashboard() {
     : weekLabel
 
   const nSessions = mode === 'sessao' ? (activeSession ? 1 : 0) : weekSessions.length
+  const sessionTypeBadge = mode === 'semanal' && sessionTypeFilter !== 'todos'
+    ? (sessionTypeFilter === 'treino' ? '🏃 Só treinos' : '⚽ Só jogos')
+    : null
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -313,6 +320,29 @@ export default function DestaquesDashboard() {
               </button>
             ))}
           </div>
+
+          {/* Toggle Tipo de Sessão — só aparece no modo semanal */}
+          {mode === 'semanal' && (
+            <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+              {[
+                { id: 'todos',  label: 'Todos' },
+                { id: 'treino', label: '🏃 Treino' },
+                { id: 'jogo',   label: '⚽ Jogo' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setSessionTypeFilter(t.id)}
+                  className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${
+                    sessionTypeFilter === t.id
+                      ? t.id === 'jogo' ? 'bg-green-500 text-white shadow-sm' : t.id === 'treino' ? 'bg-blue-500 text-white shadow-sm' : 'bg-slate-700 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Filtro sessão */}
           {mode === 'sessao' && (
@@ -372,6 +402,11 @@ export default function DestaquesDashboard() {
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-amber-500" />
             <span className="text-xs font-black text-slate-600 uppercase tracking-wide">{contextLabel}</span>
+            {sessionTypeBadge && (
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${sessionTypeFilter === 'jogo' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                {sessionTypeBadge}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-4 ml-auto">
             <div className="text-center">
