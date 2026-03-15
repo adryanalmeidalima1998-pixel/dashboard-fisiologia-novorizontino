@@ -127,25 +127,26 @@ const RADAR_METRICS = [
   { key: 'maxVelocity', label: 'Vmax', unit: 'km/h' },
 ]
 
-function buildRadarPoints(athleteData, compData, compLabel) {
+function buildRadarPointsDual(athleteData, compareData, compareLabel) {
   return RADAR_METRICS.map(m => {
     const av = athleteData[m.key] || 0
-    const cv = (compData || athleteData)[m.key] || 0
+    const cv = compareData ? (compareData[m.key] || 0) : 0
     const maxV = Math.max(av, cv, 0.001)
     return {
       subject: m.label,
-      Atleta: parseFloat(((av / maxV) * 100).toFixed(1)),
-      [compLabel]: parseFloat(((cv / maxV) * 100).toFixed(1)),
-      rawA: av, rawC: cv, unit: m.unit
+      A: parseFloat(((av / maxV) * 100).toFixed(1)),
+      B: parseFloat(((cv / maxV) * 100).toFixed(1)),
+      rawA: av, rawB: cv, unit: m.unit,
+      labelA: 'Atleta A', labelB: compareLabel || 'Atleta B',
     }
   })
 }
 
-function SingleRadar({ athleteData, compData, compLabel, compColor = '#94a3b8' }) {
+function SingleRadar({ athleteData, compData, compLabel, compColor = '#94a3b8', nameA = 'Atleta', isDual = false }) {
   if (!athleteData) return (
     <div className="flex items-center justify-center h-48 text-slate-300 text-sm">Sem dados GPS</div>
   )
-  const radarPoints = buildRadarPoints(athleteData, compData, compLabel)
+  const radarPoints = buildRadarPointsDual(athleteData, compData || athleteData, compLabel)
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null
@@ -153,13 +154,14 @@ function SingleRadar({ athleteData, compData, compLabel, compColor = '#94a3b8' }
     return (
       <div className="bg-white border border-slate-200 rounded-lg p-2 text-xs shadow-lg z-50">
         <p className="font-black text-black mb-1">{label}</p>
-        {payload.map(p => (
-          <p key={p.name} style={{ color: p.color }} className="font-bold">
-            {p.name}: {p.name === 'Atleta'
-              ? `${item?.rawA?.toFixed(1)} ${item?.unit}`
-              : `${item?.rawC?.toFixed(1)} ${item?.unit}`}
+        <p style={{ color: '#f59e0b' }} className="font-bold">
+          {nameA}: {item?.rawA?.toFixed(1)} {item?.unit}
+        </p>
+        {compData && (
+          <p style={{ color: compColor }} className="font-bold">
+            {compLabel}: {item?.rawB?.toFixed(1)} {item?.unit}
           </p>
-        ))}
+        )}
       </div>
     )
   }
@@ -170,8 +172,8 @@ function SingleRadar({ athleteData, compData, compLabel, compColor = '#94a3b8' }
         <PolarGrid stroke="#e2e8f0" />
         <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fontWeight: 'bold', fill: '#64748b' }} />
         <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-        <Radar name={compLabel} dataKey={compLabel} stroke={compColor} fill={compColor} fillOpacity={0.2} strokeWidth={1.5} />
-        <Radar name="Atleta" dataKey="Atleta" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.35} strokeWidth={2} />
+        {compData && <Radar name={compLabel} dataKey="B" stroke={compColor} fill={compColor} fillOpacity={0.2} strokeWidth={1.5} />}
+        <Radar name={nameA} dataKey="A" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.35} strokeWidth={2} />
         <RTooltip content={<CustomTooltip />} />
         <Legend wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
       </RadarChart>
@@ -179,15 +181,16 @@ function SingleRadar({ athleteData, compData, compLabel, compColor = '#94a3b8' }
   )
 }
 
-function PlayerRadarChart({ athleteData, compTeamData, compPosData, athletePosition }) {
+function PlayerRadarChart({ athleteData, compTeamData, compPosData, athletePosition, athleteName }) {
   if (!athleteData) return (
     <div className="flex items-center justify-center h-48 text-slate-300 text-sm">Sem dados GPS para gerar radar</div>
   )
+  const shortName = athleteName ? athleteName.split(' ')[0] : 'Atleta'
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div className="border border-slate-100 rounded-xl p-3">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 text-center">vs Média da Equipe</p>
-        <SingleRadar athleteData={athleteData} compData={compTeamData} compLabel="Média Equipe" compColor="#94a3b8" />
+        <SingleRadar athleteData={athleteData} compData={compTeamData} compLabel="Média Equipe" compColor="#94a3b8" nameA={shortName} />
         <p className="text-[9px] text-slate-400 text-center mt-1">Valores relativos ao máximo entre atleta e grupo</p>
       </div>
       <div className="border border-slate-100 rounded-xl p-3">
@@ -195,7 +198,7 @@ function PlayerRadarChart({ athleteData, compTeamData, compPosData, athletePosit
           vs Média da Posição {athletePosition ? <span className="text-amber-600">({athletePosition})</span> : ''}
         </p>
         {compPosData
-          ? <SingleRadar athleteData={athleteData} compData={compPosData} compLabel={athletePosition ? `Média ${athletePosition}` : 'Média Posição'} compColor="#6366f1" />
+          ? <SingleRadar athleteData={athleteData} compData={compPosData} compLabel={athletePosition ? `Média ${athletePosition}` : 'Média Posição'} compColor="#6366f1" nameA={shortName} />
           : <div className="flex flex-col items-center justify-center h-48 text-slate-300 text-sm gap-2">
               <span>Posição não identificada</span>
               {!athletePosition && <span className="text-[10px] text-slate-300">Configure a posição no modal ⚙</span>}
@@ -461,7 +464,9 @@ function IndividualContent() {
   }, [bemEstarData, gpsData])
 
   const [selectedAthlete, setSelectedAthlete] = useState(() => searchParams.get('atleta') || '')
+  const [compareAthlete, setCompareAthlete] = useState('')
   const athlete = selectedAthlete || allAthletes[0] || ''
+  const compareMode = !!(compareAthlete && compareAthlete !== athlete)
 
   const wellinessHistory = useMemo(() => bemEstarData
     .filter(r => r.playerName === athlete && r.type === 'pre')
@@ -626,7 +631,52 @@ function IndividualContent() {
     }
   }, [gpsData, athlete, athletePosition, playerPositions])
 
-  // ─── SCORES ──────────────────────────────────────────────────────────────────
+  // ─── DADOS DO ATLETA DE COMPARAÇÃO ───────────────────────────────────────────
+  const compareGpsHistory = useMemo(() => {
+    if (!compareMode) return []
+    return gpsData
+      .flatMap(s => s.rows.filter(r => r.playerName === compareAthlete && r.periodNumber === 0 && !r.isOutlier))
+      .sort((a, b) => new Date(a.sessionDate?.split('/').reverse().join('-')) - new Date(b.sessionDate?.split('/').reverse().join('-')))
+  }, [gpsData, compareAthlete, compareMode])
+
+  const compareWellnessHistory = useMemo(() => {
+    if (!compareMode) return []
+    return bemEstarData
+      .filter(r => r.playerName === compareAthlete && r.type === 'pre')
+      .sort((a, b) => a.timestamp - b.timestamp).slice(-60)
+  }, [bemEstarData, compareAthlete, compareMode])
+
+  const compareRadarData = useMemo(() => {
+    if (!compareMode || !compareGpsHistory.length) return null
+    const n = compareGpsHistory.length
+    return {
+      distanceRelative: compareGpsHistory.reduce((s, r) => s + (r.distanceRelative || 0), 0) / n,
+      hsr: compareGpsHistory.reduce((s, r) => s + (r.hsr || 0), 0) / n,
+      sprintDistance: compareGpsHistory.reduce((s, r) => s + (r.sprintDistance || 0), 0) / n,
+      accDecel: compareGpsHistory.reduce((s, r) => s + (r.acceleration || 0) + (r.deceleration || 0), 0) / n,
+      playerLoad: compareGpsHistory.reduce((s, r) => s + (r.playerLoad || 0), 0) / n,
+      maxVelocity: compareGpsHistory.reduce((s, r) => s + (r.maxVelocity || 0), 0) / n,
+    }
+  }, [compareGpsHistory, compareMode])
+
+  const compareStats = useMemo(() => {
+    if (!compareMode) return null
+    const wellScores = compareWellnessHistory.map(r => r.wellnessScore).filter(Boolean)
+    const lastWell = compareWellnessHistory[compareWellnessHistory.length - 1]
+    const latestGpsC = compareGpsHistory[compareGpsHistory.length - 1] || null
+    const vmaxMaxC = vmaxBaseline[compareAthlete] || null
+    return {
+      avgWellness: wellScores.length ? wellScores.reduce((a, b) => a + b, 0) / wellScores.length : null,
+      lastWellnessScore: lastWell?.wellnessScore ?? null,
+      gpsCount: compareGpsHistory.length,
+      wellCount: compareWellnessHistory.length,
+      avgDist: compareGpsHistory.length ? compareGpsHistory.reduce((s, r) => s + (r.totalDistance || 0), 0) / compareGpsHistory.length : null,
+      avgHsr: compareGpsHistory.length ? compareGpsHistory.reduce((s, r) => s + (r.hsr || 0), 0) / compareGpsHistory.length : null,
+      avgMmin: compareGpsHistory.length ? compareGpsHistory.reduce((s, r) => s + (r.distanceRelative || 0), 0) / compareGpsHistory.length : null,
+      vmaxBaseline: vmaxMaxC,
+      lastVmax: latestGpsC?.maxVelocity ?? null,
+    }
+  }, [compareMode, compareWellnessHistory, compareGpsHistory, vmaxBaseline, compareAthlete])
   const lastWellness = wellinessHistory[wellinessHistory.length - 1]
   const wellScores = wellinessHistory.map(r => r.wellnessScore).filter(Boolean)
   const avgWellness = wellScores.length ? wellScores.reduce((a, b) => a + b, 0) / wellScores.length : null
@@ -685,11 +735,26 @@ function IndividualContent() {
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">← VOLTAR</button>
           <button onClick={() => setShowPositionConfig(true)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1 rounded-md text-xs font-bold transition-colors border border-slate-200">⚙ Posições</button>
-          <select value={athlete} onChange={e => setSelectedAthlete(e.target.value)}
+          <select value={athlete} onChange={e => { setSelectedAthlete(e.target.value); if (e.target.value === compareAthlete) setCompareAthlete('') }}
             className="border-2 border-amber-500 rounded-lg px-3 py-1.5 text-sm font-black text-black bg-white focus:outline-none max-w-[220px]">
             <option value="">Selecionar atleta...</option>
             {allAthletes.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
+          {/* Seletor de comparação */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">vs</span>
+            <select
+              value={compareAthlete}
+              onChange={e => setCompareAthlete(e.target.value)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-black bg-white focus:outline-none max-w-[220px] transition-all ${compareMode ? 'border-2 border-blue-400 text-blue-700' : 'border border-slate-200 text-slate-400'}`}
+            >
+              <option value="">Comparar com...</option>
+              {allAthletes.filter(a => a !== athlete).map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+            {compareMode && (
+              <button onClick={() => setCompareAthlete('')} className="text-slate-400 hover:text-red-500 font-black text-sm transition-colors">✕</button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -771,18 +836,134 @@ function IndividualContent() {
       {/* ── VISÃO GERAL ── */}
       {activeTab === 'visao' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Radar */}
+          {/* Radar — modo normal vs modo comparação */}
           <div className="border border-slate-200 rounded-xl p-4 md:col-span-2">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <p className="text-xs font-black uppercase tracking-widest text-slate-500">
                 Radar de Métricas Físicas
               </p>
-              {athletePosition
-                ? <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-1 rounded-lg font-bold uppercase">{athletePosition}</span>
-                : <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-1 rounded-lg font-bold">Configure a posição no ⚙ para ver radar por posição</span>
-              }
+              <div className="flex items-center gap-2 flex-wrap">
+                {compareMode && (
+                  <span className="text-[9px] bg-blue-100 text-blue-700 border border-blue-200 px-2 py-1 rounded-lg font-black uppercase">
+                    Modo Comparação: {athlete.split(' ')[0]} vs {compareAthlete.split(' ')[0]}
+                  </span>
+                )}
+                {athletePosition && !compareMode
+                  ? <span className="text-[9px] bg-amber-100 text-amber-700 px-2 py-1 rounded-lg font-bold uppercase">{athletePosition}</span>
+                  : !compareMode && <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-1 rounded-lg font-bold">Configure a posição no ⚙ para ver radar por posição</span>
+                }
+              </div>
             </div>
-            <PlayerRadarChart athleteData={radarData} compTeamData={compTeamData} compPosData={compPosData} athletePosition={athletePosition} />
+
+            {compareMode && compareRadarData ? (
+              /* MODO COMPARAÇÃO: um radar único com as duas séries sobrepostas */
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+                  {/* Card atleta A */}
+                  <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <AthleteAvatar name={athlete} size="w-10 h-10" ring />
+                    <div>
+                      <p className="text-xs font-black text-black">{athlete.split(' ').slice(0,2).join(' ')}</p>
+                      <div className="flex gap-2 mt-1 flex-wrap">
+                        {radarData && RADAR_METRICS.slice(0,3).map(m => (
+                          <span key={m.key} className="text-[9px] font-bold text-amber-700">
+                            {m.label}: <span className="font-black">{radarData[m.key]?.toFixed(m.key === 'distanceRelative' || m.key === 'maxVelocity' ? 1 : 0)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="ml-auto w-3 h-3 rounded-full bg-amber-400 flex-shrink-0" />
+                  </div>
+                  {/* Card atleta B */}
+                  <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                    <AthleteAvatar name={compareAthlete} size="w-10 h-10" ring />
+                    <div>
+                      <p className="text-xs font-black text-black">{compareAthlete.split(' ').slice(0,2).join(' ')}</p>
+                      <div className="flex gap-2 mt-1 flex-wrap">
+                        {compareRadarData && RADAR_METRICS.slice(0,3).map(m => (
+                          <span key={m.key} className="text-[9px] font-bold text-blue-700">
+                            {m.label}: <span className="font-black">{compareRadarData[m.key]?.toFixed(m.key === 'distanceRelative' || m.key === 'maxVelocity' ? 1 : 0)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="ml-auto w-3 h-3 rounded-full bg-blue-400 flex-shrink-0" />
+                  </div>
+                </div>
+
+                {/* Radar único sobreposto */}
+                <div className="border border-slate-100 rounded-xl p-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 text-center">Radar comparativo — histórico completo</p>
+                  <SingleRadar
+                    athleteData={radarData}
+                    compData={compareRadarData}
+                    compLabel={compareAthlete.split(' ')[0]}
+                    compColor="#3b82f6"
+                    nameA={athlete.split(' ')[0]}
+                  />
+                  <p className="text-[9px] text-slate-400 text-center mt-1">Valores normalizados pelo máximo entre os dois atletas por métrica</p>
+                </div>
+
+                {/* Tabela de comparação direta */}
+                <div className="border border-slate-100 rounded-xl p-4 overflow-x-auto">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Médias históricas — face a face</p>
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b-2 border-slate-900">
+                        <th className="text-left py-2 pr-4 font-black uppercase tracking-widest text-[10px] text-slate-500">Métrica</th>
+                        <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-amber-600">{athlete.split(' ')[0]}</th>
+                        <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-blue-600">{compareAthlete.split(' ')[0]}</th>
+                        <th className="text-center py-2 px-3 font-black uppercase tracking-widest text-[10px] text-slate-400">Delta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {RADAR_METRICS.map(m => {
+                        const vA = radarData?.[m.key] ?? null
+                        const vB = compareRadarData?.[m.key] ?? null
+                        const delta = vA != null && vB != null ? vA - vB : null
+                        const fmt = v => v == null ? '—' : (m.key === 'distanceRelative' || m.key === 'maxVelocity' ? v.toFixed(1) : v.toFixed(0))
+                        const aWins = delta != null && delta > 0
+                        const bWins = delta != null && delta < 0
+                        return (
+                          <tr key={m.key} className="border-b border-slate-100 hover:bg-slate-50">
+                            <td className="py-2 pr-4 font-bold text-slate-600">{m.label} <span className="text-slate-400 font-normal">{m.unit}</span></td>
+                            <td className={`text-center py-2 px-3 font-black ${aWins ? 'text-amber-600 bg-amber-50 rounded' : 'text-slate-700'}`}>{fmt(vA)}</td>
+                            <td className={`text-center py-2 px-3 font-black ${bWins ? 'text-blue-600 bg-blue-50 rounded' : 'text-slate-700'}`}>{fmt(vB)}</td>
+                            <td className={`text-center py-2 px-3 font-black text-[10px] ${aWins ? 'text-amber-500' : bWins ? 'text-blue-500' : 'text-slate-400'}`}>
+                              {delta != null ? `${delta > 0 ? '+' : ''}${fmt(delta)}` : '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {/* Bem-estar */}
+                      <tr className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-2 pr-4 font-bold text-slate-600">Bem-estar médio <span className="text-slate-400 font-normal">/5</span></td>
+                        <td className={`text-center py-2 px-3 font-black ${avgWellness != null && compareStats?.avgWellness != null && avgWellness > compareStats.avgWellness ? 'text-amber-600 bg-amber-50 rounded' : 'text-slate-700'}`}>
+                          {avgWellness?.toFixed(1) ?? '—'}
+                        </td>
+                        <td className={`text-center py-2 px-3 font-black ${compareStats?.avgWellness != null && avgWellness != null && compareStats.avgWellness > avgWellness ? 'text-blue-600 bg-blue-50 rounded' : 'text-slate-700'}`}>
+                          {compareStats?.avgWellness?.toFixed(1) ?? '—'}
+                        </td>
+                        <td className="text-center py-2 px-3 text-slate-400 text-[10px] font-black">
+                          {avgWellness != null && compareStats?.avgWellness != null
+                            ? `${(avgWellness - compareStats.avgWellness) > 0 ? '+' : ''}${(avgWellness - compareStats.avgWellness).toFixed(1)}`
+                            : '—'}
+                        </td>
+                      </tr>
+                      <tr className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="py-2 pr-4 font-bold text-slate-600">Sessões GPS</td>
+                        <td className="text-center py-2 px-3 font-black text-slate-700">{gpsHistory.length}</td>
+                        <td className="text-center py-2 px-3 font-black text-slate-700">{compareStats?.gpsCount ?? '—'}</td>
+                        <td className="text-center py-2 px-3 text-slate-400 text-[10px] font-black">—</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              /* MODO NORMAL: radar vs equipe e vs posição */
+              <PlayerRadarChart athleteData={radarData} compTeamData={compTeamData} compPosData={compPosData} athletePosition={athletePosition} athleteName={athlete} />
+            )}
           </div>
 
           <div className="border border-slate-200 rounded-xl p-4">
