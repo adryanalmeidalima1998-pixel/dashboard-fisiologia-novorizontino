@@ -287,6 +287,7 @@ export default function Fisiologia() {
         </svg>
       )
     },
+  ]
 
   const isUploading = uploadQueue.some(q => q.status === 'uploading')
 
