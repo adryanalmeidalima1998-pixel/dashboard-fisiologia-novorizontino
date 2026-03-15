@@ -317,6 +317,13 @@ export default function DiarioDashboard() {
     }))
   }, [todayBemEstar, gpsMap])
 
+  // Atletas com GPS no dia mas SEM check-in de bem-estar (pré-treino)
+  // Estes são os atletas que o fisiologista precisa cobrar
+  const pendingCheckin = useMemo(() => {
+    const gpsNames = Object.keys(gpsMap)
+    return gpsNames.filter(name => !todayBemEstar.pre[name]).sort()
+  }, [gpsMap, todayBemEstar])
+
   // Alertas
   const alerts = useMemo(() => {
     return athletes.filter(a => {
@@ -617,6 +624,39 @@ export default function DiarioDashboard() {
                   ? gpsDaySessions.map(s => s.name).join(' + ')
                   : gpsDaySessions[0]?.name || '—'}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* PAINEL AGUARDANDO CHECK-IN — só no modo cards, quando há GPS mas sem bem-estar */}
+        {viewMode === 'cards' && pendingCheckin.length > 0 && (
+          <div className="border-2 border-blue-200 bg-blue-50 rounded-xl p-4">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-blue-700 mb-1">
+                  ⏳ Aguardando check-in — {pendingCheckin.length} atleta{pendingCheckin.length !== 1 ? 's' : ''} com GPS mas sem bem-estar
+                </p>
+                <p className="text-[10px] text-blue-600 font-medium mb-3">
+                  Estes atletas têm GPS no dia selecionado mas ainda não preencheram o formulário pré-treino.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {pendingCheckin.map(name => (
+                    <div
+                      key={name}
+                      className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-2 cursor-pointer hover:border-amber-400 transition-all"
+                      onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(name)}`)}
+                    >
+                      <AthleteAvatar name={name} size="w-7 h-7" />
+                      <span className="text-xs font-black text-slate-700">{name.split(' ').slice(0, 2).join(' ')}</span>
+                      <span className="text-[8px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-black uppercase">Sem check-in</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <span className="text-3xl font-black text-blue-300">{pendingCheckin.length}</span>
+                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">pendentes</span>
+              </div>
             </div>
           </div>
         )}
