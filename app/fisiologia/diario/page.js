@@ -110,13 +110,20 @@ function MetricBadge({ label, value, max = 5, invert = false }) {
 }
 
 // ─── COMPONENTE CARD DO ATLETA ────────────────────────────────────────────────
-function AthleteCard({ athlete, gpsRow, vmaxBaseline, onDetail }) {
+function AthleteCard({ athlete, gpsRow, vmaxBaseline, recovery, onDetail }) {
   const { pre, post } = athlete
   const ws = pre?.wellnessScore
   const hasAlert = (ws && ws < 2.5) || pre?.temDor || (pre?.corUrina >= 4)
   const vmaxPct = gpsRow && vmaxBaseline[athlete.name]
     ? calcVmaxPct(gpsRow.maxVelocity, vmaxBaseline[athlete.name])
     : null
+
+  // Cor e ícone do índice de recuperação
+  function recoveryStyle(delta) {
+    if (delta > 0.3) return { color: 'text-green-600', bg: 'bg-green-50 border-green-200', icon: '↑' }
+    if (delta < -0.3) return { color: 'text-red-600',   bg: 'bg-red-50 border-red-200',   icon: '↓' }
+    return { color: 'text-slate-500', bg: 'bg-slate-50 border-slate-200', icon: '→' }
+  }
 
   return (
     <div
@@ -221,6 +228,23 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, onDetail }) {
           </div>
         </div>
       )}
+
+      {/* Índice de recuperação */}
+      {recovery && (
+        <div className={`mt-2 pt-2 border-t border-slate-100`}>
+          <div className={`flex items-center justify-between px-2 py-1 rounded-lg border ${recoveryStyle(recovery.delta).bg}`}>
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Recuperação</span>
+            <div className="flex items-center gap-1">
+              <span className={`text-xs font-black ${recoveryStyle(recovery.delta).color}`}>
+                {recoveryStyle(recovery.delta).icon} {recovery.delta > 0 ? '+' : ''}{recovery.delta.toFixed(1)}
+              </span>
+              <span className="text-[9px] text-slate-400 font-medium">
+                em {recovery.daysDiff}d
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -318,11 +342,40 @@ export default function DiarioDashboard() {
   }, [todayBemEstar, gpsMap])
 
   // Atletas com GPS no dia mas SEM check-in de bem-estar (pré-treino)
-  // Estes são os atletas que o fisiologista precisa cobrar
   const pendingCheckin = useMemo(() => {
     const gpsNames = Object.keys(gpsMap)
     return gpsNames.filter(name => !todayBemEstar.pre[name]).sort()
   }, [gpsMap, todayBemEstar])
+
+  // ── ÍNDICE DE RECUPERAÇÃO por atleta ──────────────────────────────────────
+  // Compara o wellness pré de hoje com o wellness pré da última sessão anterior
+  // Delta positivo = atleta recuperou; negativo = piorou; null = sem histórico
+  const recoveryMap = useMemo(() => {
+    const map = {}
+    const todayDate = selectedDate
+    for (const a of athletes) {
+      const todayScore = todayBemEstar.pre[a.name]?.wellnessScore
+      if (todayScore == null) { map[a.name] = null; continue }
+
+      // Último registro pré ANTES de hoje
+      const prevPre = bemEstarData
+        .filter(r => r.playerName === a.name && r.type === 'pre' && r.date < todayDate && r.wellnessScore != null)
+        .sort((a, b) => b.date.localeCompare(a.date))[0]
+
+      if (!prevPre) { map[a.name] = null; continue }
+
+      const daysDiff = Math.round(
+        (new Date(todayDate + 'T12:00:00') - new Date(prevPre.date + 'T12:00:00')) / (1000 * 60 * 60 * 24)
+      )
+      map[a.name] = {
+        delta: parseFloat((todayScore - prevPre.wellnessScore).toFixed(2)),
+        prevScore: prevPre.wellnessScore,
+        prevDate: prevPre.date,
+        daysDiff,
+      }
+    }
+    return map
+  }, [athletes, bemEstarData, selectedDate, todayBemEstar])
 
   // Alertas
   const alerts = useMemo(() => {
@@ -689,6 +742,7 @@ export default function DiarioDashboard() {
                 athlete={athlete}
                 gpsRow={gpsMap[athlete.name] || null}
                 vmaxBaseline={vmaxBaseline}
+                recovery={recoveryMap[athlete.name] || null}
                 onDetail={name => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(name)}`)}
               />
             ))}
