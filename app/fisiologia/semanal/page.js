@@ -83,6 +83,17 @@ export default function SemanalDashboard() {
   const [sortCarga, setSortCarga] = useState({ col: 'total', dir: 'desc' })
   const [sortGps, setSortGps] = useState({ col: 'totalDistance', dir: 'desc' })
   const [sortBem, setSortBem] = useState({ col: 'avg', dir: 'desc' })
+  // Atletas excluídos da média do grupo (DM, goleiro no profissional, erro GPS, etc.)
+  const [excludedAthletes, setExcludedAthletes] = useState(new Set())
+  const [showExcludePanel, setShowExcludePanel] = useState(false)
+
+  function toggleExclude(athlete) {
+    setExcludedAthletes(prev => {
+      const next = new Set(prev)
+      next.has(athlete) ? next.delete(athlete) : next.add(athlete)
+      return next
+    })
+  }
 
   // Posições únicas disponíveis
   const availablePositions = useMemo(() => {
@@ -282,15 +293,19 @@ export default function SemanalDashboard() {
     return list
   }, [weekAthletes, weekBemEstar, weekDays, sortBem])
 
-  // Médias do grupo para carga
+  // Médias do grupo para carga (exclui atletas marcados)
   const groupCargaAvg = useMemo(() => {
-    const vals = weekAthletes.map(a => weekStats[a]?.weeklySum || 0).filter(v => v > 0)
+    const vals = weekAthletes
+      .filter(a => !excludedAthletes.has(a))
+      .map(a => weekStats[a]?.weeklySum || 0).filter(v => v > 0)
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
-  }, [weekAthletes, weekStats])
+  }, [weekAthletes, weekStats, excludedAthletes])
 
-  // Médias de GPS (para colorização relativa)
+  // Médias de GPS (para colorização relativa) — exclui atletas marcados como fora da média
   const gpsAvgs = useMemo(() => {
-    const vals = Object.values(gpsWeekly).filter(v => v !== null)
+    const vals = Object.entries(gpsWeekly)
+      .filter(([name, v]) => v !== null && !excludedAthletes.has(name))
+      .map(([, v]) => v)
     if (vals.length === 0) return {}
     return {
       totalDistance: vals.reduce((s, v) => s + v.totalDistance, 0) / vals.length,
@@ -299,7 +314,7 @@ export default function SemanalDashboard() {
       accDecel: vals.reduce((s, v) => s + v.accDecel, 0) / vals.length,
       playerLoad: vals.reduce((s, v) => s + v.playerLoad, 0) / vals.length,
     }
-  }, [gpsWeekly])
+  }, [gpsWeekly, excludedAthletes])
 
   // ── MÉDIAS GPS: grupo + por posição ─────────────────────────────────────────
   const GPS_METRICS = [
@@ -313,23 +328,25 @@ export default function SemanalDashboard() {
   ]
 
   const mediaGpsData = useMemo(() => {
+    // Para a MÉDIA do grupo, exclui atletas marcados — mas mostra todos na tabela
     const athletesWithGps = weekAthletes.filter(a => gpsWeekly[a])
-    if (!athletesWithGps.length) return null
+    const athletesForAvg = athletesWithGps.filter(a => !excludedAthletes.has(a))
+    if (!athletesForAvg.length && !athletesWithGps.length) return null
 
-    // Médias do grupo por métrica
+    // Médias do grupo por métrica (apenas atletas não excluídos)
     const teamAvgs = {}
     GPS_METRICS.forEach(m => {
-      const vals = athletesWithGps.map(a => gpsWeekly[a][m.key] || 0).filter(v => v > 0)
+      const vals = athletesForAvg.map(a => gpsWeekly[a][m.key] || 0).filter(v => v > 0)
       teamAvgs[m.key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
     })
 
-    // Posições com pelo menos 1 atleta com GPS
-    const positions = [...new Set(athletesWithGps.map(a => playerPositions[a]).filter(Boolean))].sort()
+    // Posições com pelo menos 1 atleta com GPS (não excluído)
+    const positions = [...new Set(athletesForAvg.map(a => playerPositions[a]).filter(Boolean))].sort()
 
-    // Médias por posição por métrica
+    // Médias por posição por métrica (apenas atletas não excluídos)
     const posAvgs = {}
     positions.forEach(pos => {
-      const posAthletes = athletesWithGps.filter(a => playerPositions[a] === pos)
+      const posAthletes = athletesForAvg.filter(a => playerPositions[a] === pos)
       posAvgs[pos] = {}
       GPS_METRICS.forEach(m => {
         const vals = posAthletes.map(a => gpsWeekly[a][m.key] || 0).filter(v => v > 0)
@@ -346,8 +363,8 @@ export default function SemanalDashboard() {
       return { ...m, points, teamAvg: teamAvgs[m.key] }
     })
 
-    return { chartData, teamAvgs, positions, n: athletesWithGps.length }
-  }, [weekAthletes, gpsWeekly, playerPositions])
+    return { chartData, teamAvgs, positions, n: athletesForAvg.length, nTotal: athletesWithGps.length, nExcluded: excludedAthletes.size }
+  }, [weekAthletes, gpsWeekly, playerPositions, excludedAthletes])
 
   // ── DADOS HISTÓRICOS PARA ABA EVOLUÇÃO ───────────────────────────────────
   const GPS_EVOLUCAO_METRICS = [
@@ -753,12 +770,89 @@ export default function SemanalDashboard() {
         {/* TAB: GPS SEMANAL */}
         {activeTab === 'gps' && (
           <div className="overflow-x-auto">
+            {/* Botão de seleção para média */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                {excludedAthletes.size > 0 && (
+                  <span className="bg-amber-100 text-amber-700 border border-amber-300 px-2 py-1 rounded-lg text-[10px] font-black uppercase">
+                    ⚠ {excludedAthletes.size} atleta(s) fora da média
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowExcludePanel(p => !p)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border ${showExcludePanel ? 'bg-amber-500 text-black border-amber-500' : 'bg-white text-slate-600 border-slate-200 hover:border-amber-400'}`}
+              >
+                ☑ Selecionar atletas p/ média
+              </button>
+            </div>
+
+            {/* Painel de seleção */}
+            {showExcludePanel && (() => {
+              const athletesWithGps = weekAthletes.filter(a => gpsWeekly[a])
+              return (
+                <div className="mb-4 border-2 border-amber-300 bg-amber-50 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-widest text-amber-800">Atletas incluídos na média do grupo</p>
+                      <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+                        Desmarque atletas que não participaram normalmente (DM, goleiro no profissional, erro de GPS, etc.)
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setExcludedAthletes(new Set())}
+                        className="text-[10px] font-black uppercase tracking-widest text-amber-700 hover:text-amber-900 px-2 py-1 rounded-lg border border-amber-300 hover:bg-amber-100 transition-all"
+                      >
+                        Incluir todos
+                      </button>
+                      <button
+                        onClick={() => setExcludedAthletes(new Set(athletesWithGps))}
+                        className="text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 transition-all"
+                      >
+                        Desmarcar todos
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {athletesWithGps.map(athlete => {
+                      const isExcluded = excludedAthletes.has(athlete)
+                      const g = gpsWeekly[athlete]
+                      return (
+                        <button
+                          key={athlete}
+                          onClick={() => toggleExclude(athlete)}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                            isExcluded
+                              ? 'bg-white border-slate-200 text-slate-400 line-through opacity-60'
+                              : 'bg-white border-amber-400 text-black hover:bg-amber-50'
+                          }`}
+                        >
+                          <AthleteAvatar name={athlete} size="w-6 h-6" />
+                          <span>{athlete.split(' ').slice(0, 2).join(' ')}</span>
+                          <span className="text-[9px] text-slate-400 font-medium">{g?.sessions ?? 0} sess.</span>
+                          {isExcluded
+                            ? <span className="text-[9px] bg-red-100 text-red-500 px-1 rounded font-black">FORA</span>
+                            : <span className="text-[9px] bg-green-100 text-green-700 px-1 rounded font-black">✓</span>
+                          }
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="mt-3 text-[10px] text-amber-600 font-bold">
+                    Média calculada com {athletesWithGps.length - excludedAthletes.size} atleta(s) de {athletesWithGps.length} com GPS na semana
+                  </p>
+                </div>
+              )
+            })()}
             {sortedGpsAthletes.length > 0 ? (() => {
-              // Médias GPS do grupo (somente atletas com dados)
+              // Médias GPS do grupo (somente atletas com dados E não excluídos)
               const gpsKeys = ['totalDistance','hsr','sprintDistance','sprintCount','accDecel','avgMmin','maxVelocity','playerLoad']
               const groupGpsAvg = {}
               gpsKeys.forEach(k => {
-                const vals = sortedGpsAthletes.map(a => gpsWeekly[a]?.[k] || 0).filter(v => v > 0)
+                const vals = sortedGpsAthletes
+                  .filter(a => !excludedAthletes.has(a))
+                  .map(a => gpsWeekly[a]?.[k] || 0).filter(v => v > 0)
                 groupGpsAvg[k] = vals.length ? vals.reduce((a,b) => a+b,0) / vals.length : null
               })
               // Cor relativa à média: verde >120%, vermelho <80%
@@ -788,13 +882,17 @@ export default function SemanalDashboard() {
                   <tbody>
                     {sortedGpsAthletes.map((athlete, idx) => {
                       const g = gpsWeekly[athlete]
+                      const isExcluded = excludedAthletes.has(athlete)
                       return (
-                        <tr key={athlete} className={`border-b border-slate-100 hover:bg-amber-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                        <tr key={athlete} className={`border-b border-slate-100 hover:bg-amber-50 cursor-pointer ${isExcluded ? 'opacity-50 bg-slate-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
                           onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}>
                           <td className="py-2 pr-4 font-bold text-black">
                             <div className="flex items-center gap-2">
                               <AthleteAvatar name={athlete} size="w-7 h-7" />
                               <span>{athlete.split(' ').slice(0, 2).join(' ')}</span>
+                              {isExcluded && (
+                                <span className="text-[8px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase">Fora da média</span>
+                              )}
                             </div>
                           </td>
                           <td className="text-center py-2 px-3 font-bold text-slate-600">{g.sessions}</td>
@@ -812,7 +910,14 @@ export default function SemanalDashboard() {
                   </tbody>
                   <tfoot className="border-t-2 border-slate-300 bg-amber-50">
                     <tr>
-                      <td className="py-2 pr-4 font-black text-[10px] uppercase text-amber-700">Média Grupo</td>
+                      <td className="py-2 pr-4 font-black text-[10px] uppercase text-amber-700">
+                        Média Grupo
+                        {excludedAthletes.size > 0 && (
+                          <span className="ml-1 text-[8px] bg-amber-200 text-amber-800 px-1 py-0.5 rounded normal-case font-black">
+                            {sortedGpsAthletes.filter(a => !excludedAthletes.has(a)).length}/{sortedGpsAthletes.length} atletas
+                          </span>
+                        )}
+                      </td>
                       <td className="text-center py-2 px-3 text-amber-500 font-black">—</td>
                       {gpsKeys.map(k => (
                         <td key={k} className="text-center py-2 px-3 font-black text-amber-700 text-[10px]">
@@ -1120,8 +1225,11 @@ export default function SemanalDashboard() {
                     <h2 className="text-xl font-black text-black uppercase leading-none">Grupo + Por Posição</h2>
                   </div>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-center">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">Atletas com GPS</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">Atletas na Média</p>
                     <p className="text-2xl font-black text-amber-700">{mediaGpsData.n}</p>
+                    {mediaGpsData.nExcluded > 0 && (
+                      <p className="text-[9px] text-amber-500 font-bold">{mediaGpsData.nExcluded} excluído(s)</p>
+                    )}
                   </div>
                 </div>
 
