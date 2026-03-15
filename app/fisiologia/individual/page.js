@@ -681,6 +681,30 @@ function IndividualContent() {
   const wellScores = wellinessHistory.map(r => r.wellnessScore).filter(Boolean)
   const avgWellness = wellScores.length ? wellScores.reduce((a, b) => a + b, 0) / wellScores.length : null
 
+  // ── ÍNDICE DE RECUPERAÇÃO ────────────────────────────────────────────────────
+  // Compara pares consecutivos de wellness pré para mostrar tendência de recuperação
+  const recoveryIndex = useMemo(() => {
+    const pre = wellinessHistory.filter(r => r.wellnessScore != null).sort((a, b) => a.date.localeCompare(b.date))
+    if (pre.length < 2) return null
+    const last = pre[pre.length - 1]
+    const prev = pre[pre.length - 2]
+    const delta = parseFloat((last.wellnessScore - prev.wellnessScore).toFixed(2))
+    const daysDiff = Math.round(
+      (new Date(last.date + 'T12:00:00') - new Date(prev.date + 'T12:00:00')) / (1000 * 60 * 60 * 24)
+    )
+    // Tendência dos últimos 5 pares (média dos deltas)
+    const pairs = []
+    for (let i = pre.length - 1; i >= 1 && pairs.length < 5; i--) {
+      pairs.push(pre[i].wellnessScore - pre[i - 1].wellnessScore)
+    }
+    const avgTrend = pairs.length ? pairs.reduce((a, b) => a + b, 0) / pairs.length : 0
+    // Sparkline dos últimos 8 deltas
+    const sparkline = pre.slice(-9).map((r, i, arr) =>
+      i === 0 ? null : parseFloat((r.wellnessScore - arr[i - 1].wellnessScore).toFixed(2))
+    ).filter(v => v !== null)
+    return { delta, daysDiff, avgTrend, sparkline, lastScore: last.wellnessScore, prevScore: prev.wellnessScore }
+  }, [wellinessHistory])
+
   const wellnessPoints = wellinessHistory.slice(-30).map(r => r.wellnessScore)
   const sonoPoints = wellinessHistory.slice(-30).map(r => r.sono)
   const fadPoints = wellinessHistory.slice(-30).map(r => r.fadiga ? (6 - r.fadiga) : null)
@@ -810,6 +834,12 @@ function IndividualContent() {
           <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-60">Bem-Estar (último)</p>
           <p className="text-3xl font-black">{lastWellness?.wellnessScore?.toFixed(1) ?? '—'}</p>
           <p className="text-[10px] mt-1 opacity-70">Média 30d: {avgWellness ? avgWellness.toFixed(1) : '—'}</p>
+          {recoveryIndex && (
+            <div className={`mt-2 flex items-center gap-1.5 text-[10px] font-black ${recoveryIndex.delta > 0.3 ? 'text-green-700' : recoveryIndex.delta < -0.3 ? 'text-red-600' : 'text-slate-500'}`}>
+              <span>{recoveryIndex.delta > 0.3 ? '↑' : recoveryIndex.delta < -0.3 ? '↓' : '→'}</span>
+              <span>{recoveryIndex.delta > 0 ? '+' : ''}{recoveryIndex.delta.toFixed(1)} em {recoveryIndex.daysDiff}d</span>
+            </div>
+          )}
         </div>
         <div className={`border-2 rounded-xl p-4 ${Object.keys(painCodeMap).length > 0 ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-200'}`}>
           <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Dores relatadas</p>
@@ -967,8 +997,40 @@ function IndividualContent() {
           </div>
 
           <div className="border border-slate-200 rounded-xl p-4">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Tendência Bem-Estar (30 dias)</p>
+            <div className="flex items-start justify-between mb-3">
+              <p className="text-xs font-black uppercase tracking-widest text-slate-500">Tendência Bem-Estar (30 dias)</p>
+              {recoveryIndex && (
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-black ${
+                  recoveryIndex.delta > 0.3 ? 'bg-green-50 border-green-200 text-green-700' :
+                  recoveryIndex.delta < -0.3 ? 'bg-red-50 border-red-200 text-red-600' :
+                  'bg-slate-50 border-slate-200 text-slate-500'
+                }`}>
+                  <span>{recoveryIndex.delta > 0.3 ? '↑' : recoveryIndex.delta < -0.3 ? '↓' : '→'}</span>
+                  <span>{recoveryIndex.delta > 0 ? '+' : ''}{recoveryIndex.delta.toFixed(1)} em {recoveryIndex.daysDiff}d</span>
+                </div>
+              )}
+            </div>
             <Sparkline values={wellnessPoints} color="#f59e0b" height={48} />
+            {recoveryIndex && recoveryIndex.sparkline.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-100">
+                <p className="text-[9px] font-black uppercase text-slate-400 mb-1">
+                  Δ Recuperação — últimas {recoveryIndex.sparkline.length} transições
+                  {recoveryIndex.avgTrend !== 0 && (
+                    <span className={`ml-2 ${recoveryIndex.avgTrend > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      tendência: {recoveryIndex.avgTrend > 0 ? '+' : ''}{recoveryIndex.avgTrend.toFixed(2)}/sessão
+                    </span>
+                  )}
+                </p>
+                <Sparkline
+                  values={recoveryIndex.sparkline}
+                  color={recoveryIndex.avgTrend >= 0 ? '#16a34a' : '#dc2626'}
+                  height={28}
+                />
+                <p className="text-[9px] text-slate-400 mt-1">
+                  {recoveryIndex.prevScore.toFixed(1)} → {recoveryIndex.lastScore.toFixed(1)} (último par)
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div><p className="text-[9px] font-black uppercase text-slate-400 mb-1">Sono</p><Sparkline values={sonoPoints} color="#3b82f6" height={28} /></div>
               <div><p className="text-[9px] font-black uppercase text-slate-400 mb-1">Fadiga (inv.)</p><Sparkline values={fadPoints} color="#ef4444" height={28} /></div>
