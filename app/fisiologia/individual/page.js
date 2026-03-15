@@ -581,6 +581,48 @@ function IndividualContent() {
     return Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 8)
   }, [wellinessHistory])
 
+  // ── TIMELINE DE LESÕES ───────────────────────────────────────────────────────
+  // Agrupa episódios por região do corpo, em ordem cronológica
+  const injuryTimeline = useMemo(() => {
+    // Monta lista de eventos: { date, codes: [code,...], labels: [label,...], wellnessScore }
+    const events = []
+    const sorted = [...wellinessHistory].filter(r => r.temDor && r.dorLocalizada).sort((a, b) => a.date.localeCompare(b.date))
+    for (const r of sorted) {
+      const parts = r.dorLocalizada.split(',').map(p => p.trim()).filter(p => p && p !== '0 - Sem dor')
+      const codes = []
+      const labels = []
+      for (const part of parts) {
+        const code = part.split(' - ')[0].trim()
+        if (ANATOMY_POINTS[code]) {
+          codes.push(code)
+          labels.push(DOR_LABELS[code] || code)
+        } else {
+          for (const [k, v] of Object.entries(DOR_LABELS)) {
+            if (part.toLowerCase().includes(v.toLowerCase())) {
+              codes.push(k); labels.push(v); break
+            }
+          }
+        }
+      }
+      if (codes.length > 0) events.push({ date: r.date, codes, labels, wellnessScore: r.wellnessScore })
+    }
+
+    // Agrupa por região (código): lista de datas em que apareceu
+    const byRegion = {}
+    for (const ev of events) {
+      for (let i = 0; i < ev.codes.length; i++) {
+        const code = ev.codes[i]
+        if (!byRegion[code]) byRegion[code] = { code, label: ev.labels[i], dates: [] }
+        byRegion[code].dates.push(ev.date)
+      }
+    }
+    // Ordena por frequência desc
+    return {
+      events,
+      byRegion: Object.values(byRegion).sort((a, b) => b.dates.length - a.dates.length),
+    }
+  }, [wellinessHistory])
+
   // ─── RADAR ───────────────────────────────────────────────────────────────────
   const athletePosition = playerPositions[athlete] || null
 
@@ -855,6 +897,7 @@ function IndividualContent() {
           { id: 'gps', label: 'GPS & Carga' },
           { id: 'bemEstar', label: 'Bem-Estar' },
           { id: 'dor', label: `Dor Localizada${Object.keys(painCodeMap).length > 0 ? ` (${Object.keys(painCodeMap).length} regiões)` : ''}` },
+          { id: 'lesoes', label: `📅 Histórico de Lesões${painHistory.length > 0 ? ` (${painHistory.length})` : ''}` },
         ].map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
             className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${activeTab === t.id ? 'border-b-2 border-amber-500 text-black' : 'text-slate-400 hover:text-slate-600'}`}>
@@ -1372,6 +1415,167 @@ function IndividualContent() {
           </div>
         </div>
       )}
+      {/* ── HISTÓRICO DE LESÕES ── */}
+      {activeTab === 'lesoes' && (() => {
+        const { events, byRegion } = injuryTimeline
+        if (events.length === 0) return (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+            <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm font-medium">Sem episódios de dor no histórico</p>
+          </div>
+        )
+
+        // Span de datas para escalar a timeline
+        const allDates = events.map(e => e.date).sort()
+        const firstDate = new Date(allDates[0] + 'T12:00:00')
+        const lastDate  = new Date(allDates[allDates.length - 1] + 'T12:00:00')
+        const totalDays = Math.max((lastDate - firstDate) / (1000 * 60 * 60 * 24), 1)
+
+        function datePct(dateStr) {
+          const d = new Date(dateStr + 'T12:00:00')
+          return Math.round(((d - firstDate) / (totalDays * 1000 * 60 * 60 * 24)) * 100)
+        }
+
+        // Cores por intensidade de frequência
+        const maxFreq = Math.max(...byRegion.map(r => r.dates.length), 1)
+        function regionColor(count) {
+          const i = count / maxFreq
+          if (i > 0.66) return { dot: 'bg-red-500', text: 'text-red-700', bar: 'bg-red-400', light: 'bg-red-50 border-red-200' }
+          if (i > 0.33) return { dot: 'bg-orange-400', text: 'text-orange-600', bar: 'bg-orange-400', light: 'bg-orange-50 border-orange-200' }
+          return { dot: 'bg-amber-400', text: 'text-amber-600', bar: 'bg-amber-300', light: 'bg-amber-50 border-amber-200' }
+        }
+
+        return (
+          <div className="flex flex-col gap-6">
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Episódios</p>
+                <p className="text-2xl font-black text-black">{events.length}</p>
+                <p className="text-[10px] text-slate-500">relatos de dor</p>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Regiões afetadas</p>
+                <p className="text-2xl font-black text-black">{byRegion.length}</p>
+                <p className="text-[10px] text-slate-500">distintas</p>
+              </div>
+              <div className={`border rounded-xl p-3 ${regionColor(byRegion[0]?.dates.length || 0).light}`}>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Região mais recorrente</p>
+                <p className={`text-sm font-black leading-tight ${regionColor(byRegion[0]?.dates.length || 0).text}`}>
+                  {byRegion[0]?.label ?? '—'}
+                </p>
+                {byRegion[0] && <p className="text-[10px] text-slate-500 mt-0.5">{byRegion[0].dates.length}× relatado</p>}
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Último episódio</p>
+                <p className="text-sm font-black text-black">{events[events.length - 1]?.date ?? '—'}</p>
+                <p className="text-[10px] text-slate-500">
+                  {events[events.length - 1] ? `${Math.round((Date.now() - new Date(events[events.length-1].date + 'T12:00:00').getTime()) / (1000*60*60*24))}d atrás` : ''}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* TIMELINE por região */}
+              <div className="border border-slate-200 rounded-xl p-4">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4">Timeline por região do corpo</p>
+                <div className="flex flex-col gap-4">
+                  {byRegion.map(({ code, label, dates }) => {
+                    const c = regionColor(dates.length)
+                    return (
+                      <div key={code}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2.5 h-2.5 rounded-full ${c.dot} flex-shrink-0`} />
+                            <span className="text-xs font-black text-black">{label}</span>
+                            <span className="text-[9px] text-slate-400 font-medium">[{code}]</span>
+                          </div>
+                          <span className={`text-xs font-black ${c.text}`}>{dates.length}×</span>
+                        </div>
+                        {/* Barra de timeline com marcadores de data */}
+                        <div className="relative h-5 bg-slate-100 rounded-full overflow-hidden">
+                          {dates.map((d, i) => {
+                            const pct = datePct(d)
+                            return (
+                              <div
+                                key={i}
+                                title={d}
+                                className={`absolute top-1 w-3 h-3 rounded-full ${c.dot} border-2 border-white`}
+                                style={{ left: `calc(${pct}% - 6px)` }}
+                              />
+                            )
+                          })}
+                        </div>
+                        <div className="flex justify-between text-[8px] text-slate-400 font-medium mt-0.5">
+                          <span>{allDates[0]}</span>
+                          <span>{allDates[allDates.length - 1]}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3 text-[9px] font-black text-slate-400 border-t border-slate-100 pt-3">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />Alta recorrência</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" />Moderada</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Baixa</span>
+                </div>
+              </div>
+
+              {/* CRONOGRAMA VERTICAL de todos os episódios */}
+              <div className="border border-slate-200 rounded-xl p-4">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4">Cronograma — todos os episódios</p>
+                <div className="relative">
+                  {/* Linha central */}
+                  <div className="absolute left-16 top-0 bottom-0 w-px bg-slate-200" />
+                  <div className="flex flex-col gap-0">
+                    {[...events].reverse().map((ev, i) => {
+                      const ws = ev.wellnessScore
+                      const wsBg = ws >= 3.5 ? 'bg-green-100 text-green-700' : ws >= 2.5 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                      // Agrupa por mês para separadores
+                      const month = ev.date.substring(0, 7)
+                      const prevMonth = i > 0 ? [...events].reverse()[i - 1].date.substring(0, 7) : null
+                      const showMonth = month !== prevMonth
+                      return (
+                        <div key={i}>
+                          {showMonth && (
+                            <div className="flex items-center gap-2 my-2 pl-0">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 w-14 text-right">
+                                {new Date(month + '-01T12:00:00').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}
+                              </span>
+                              <div className="flex-1 h-px bg-slate-200 ml-2" />
+                            </div>
+                          )}
+                          <div className="flex items-start gap-3 py-1.5">
+                            {/* Data */}
+                            <span className="text-[9px] text-slate-400 font-bold w-14 text-right flex-shrink-0 pt-0.5">
+                              {ev.date.substring(5).replace('-', '/')}
+                            </span>
+                            {/* Ponto na linha */}
+                            <div className="flex-shrink-0 w-3 h-3 rounded-full bg-orange-400 border-2 border-white mt-0.5 relative z-10" />
+                            {/* Conteúdo */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap gap-1 mb-0.5">
+                                {ev.labels.map((l, j) => (
+                                  <span key={j} className="text-[9px] font-black bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded">{l}</span>
+                                ))}
+                              </div>
+                              {ws && (
+                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${wsBg}`}>Wellness {ws.toFixed(1)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
