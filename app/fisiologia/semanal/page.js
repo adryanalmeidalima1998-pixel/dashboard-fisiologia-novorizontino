@@ -79,18 +79,47 @@ export default function SemanalDashboard() {
   const [evolucaoMetric, setEvolucaoMetric] = useState('totalDistance')
   const [filterPosition, setFilterPosition] = useState('')
   const [isPdfLoading, setIsPdfLoading] = useState(false)
+  const [gpsTypeFilter, setGpsTypeFilter] = useState('todos') // 'todos' | 'treino' | 'jogo'
   // Ordenação das tabelas: { col, dir }
   const [sortCarga, setSortCarga] = useState({ col: 'total', dir: 'desc' })
   const [sortGps, setSortGps] = useState({ col: 'totalDistance', dir: 'desc' })
   const [sortBem, setSortBem] = useState({ col: 'avg', dir: 'desc' })
   // Atletas excluídos da média do grupo (DM, goleiro no profissional, erro GPS, etc.)
-  const [excludedAthletes, setExcludedAthletes] = useState(new Set())
+  // Persiste no localStorage por semana: chave "excluded_YYYY-WW"
+  function getWeekKey(offset) {
+    const { monday } = getWeekBounds(offset)
+    const year = monday.getFullYear()
+    const startOfYear = new Date(year, 0, 1)
+    const week = Math.ceil(((monday - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
+    return `excluded_${year}-W${String(week).padStart(2, '0')}`
+  }
+
+  const [excludedAthletes, setExcludedAthletes] = useState(() => {
+    try {
+      const saved = localStorage.getItem(getWeekKey(0))
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch { return new Set() }
+  })
   const [showExcludePanel, setShowExcludePanel] = useState(false)
+
+  // Sincroniza exclusões com localStorage sempre que weekOffset ou excludedAthletes mudam
+  function saveExclusions(next, offset) {
+    try { localStorage.setItem(getWeekKey(offset), JSON.stringify(Array.from(next))) } catch {}
+  }
+
+  // Carrega exclusões do localStorage quando troca de semana
+  const loadExclusionsForWeek = (offset) => {
+    try {
+      const saved = localStorage.getItem(getWeekKey(offset))
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch { return new Set() }
+  }
 
   function toggleExclude(athlete) {
     setExcludedAthletes(prev => {
       const next = new Set(prev)
       next.has(athlete) ? next.delete(athlete) : next.add(athlete)
+      saveExclusions(next, weekOffset)
       return next
     })
   }
@@ -141,9 +170,12 @@ export default function SemanalDashboard() {
         if (!d || !m || !y) return false
         dt = new Date(`${y}-${m}-${d}T12:00:00`)
       }
-      return dt >= monday && dt <= sunday
+      if (!(dt >= monday && dt <= sunday)) return false
+      if (gpsTypeFilter === 'todos') return true
+      const t = s.metadata?.sessionType || s.metadata?.type || ''
+      return t === gpsTypeFilter
     })
-  }, [gpsData, monday, sunday])
+  }, [gpsData, monday, sunday, gpsTypeFilter])
 
   // Atletas únicos com dados na semana — normaliza nomes para evitar duplicatas
   // ex: "João Pedro" e "JOAO PEDRO" do formulário vs GPS viram a mesma entrada
@@ -614,10 +646,30 @@ export default function SemanalDashboard() {
                 {availablePositions.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             )}
+            {/* Toggle tipo de sessão GPS */}
+            <div className="flex bg-slate-100 rounded-lg p-0.5 gap-0.5">
+              {[
+                { id: 'todos',  label: 'Todos' },
+                { id: 'treino', label: '🏃 Treino' },
+                { id: 'jogo',   label: '⚽ Jogo' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setGpsTypeFilter(t.id)}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide transition-all ${
+                    gpsTypeFilter === t.id
+                      ? t.id === 'jogo' ? 'bg-green-500 text-white shadow-sm' : t.id === 'treino' ? 'bg-blue-500 text-white shadow-sm' : 'bg-slate-700 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setWeekOffset(w => w - 1)} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">‹</button>
+              <button onClick={() => { const next = weekOffset - 1; setWeekOffset(next); setExcludedAthletes(loadExclusionsForWeek(next)) }} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">‹</button>
               <div className="bg-amber-500 text-black px-3 py-1 font-black text-xs uppercase italic shadow-md min-w-[160px] text-center">{weekLabel}</div>
-              <button onClick={() => setWeekOffset(w => Math.min(0, w + 1))} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">›</button>
+              <button onClick={() => { const next = Math.min(0, weekOffset + 1); setWeekOffset(next); setExcludedAthletes(loadExclusionsForWeek(next)) }} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">›</button>
             </div>
           </div>
         </header>
@@ -642,7 +694,14 @@ export default function SemanalDashboard() {
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Atletas na semana</p>
             <p className="text-2xl font-black text-black">{weekAthletes.length}</p>
-            <p className="text-[10px] text-slate-500">{weekGps.length} sessão(ões) GPS</p>
+            <p className="text-[10px] text-slate-500">
+              {weekGps.length} sessão(ões) GPS
+              {gpsTypeFilter !== 'todos' && (
+                <span className={`ml-1 px-1.5 py-0.5 rounded font-black text-[9px] ${gpsTypeFilter === 'jogo' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {gpsTypeFilter === 'jogo' ? '⚽ só jogos' : '🏃 só treinos'}
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
@@ -801,13 +860,13 @@ export default function SemanalDashboard() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setExcludedAthletes(new Set())}
+                        onClick={() => { setExcludedAthletes(new Set()); saveExclusions(new Set(), weekOffset) }}
                         className="text-[10px] font-black uppercase tracking-widest text-amber-700 hover:text-amber-900 px-2 py-1 rounded-lg border border-amber-300 hover:bg-amber-100 transition-all"
                       >
                         Incluir todos
                       </button>
                       <button
-                        onClick={() => setExcludedAthletes(new Set(athletesWithGps))}
+                        onClick={() => { const all = new Set(athletesWithGps); setExcludedAthletes(all); saveExclusions(all, weekOffset) }}
                         className="text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 transition-all"
                       >
                         Desmarcar todos
