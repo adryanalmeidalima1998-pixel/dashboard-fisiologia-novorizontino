@@ -56,7 +56,7 @@ function MetricBar({ value, max = 5, invert = false, label }) {
 
 export default function BemEstarPage() {
   const router = useRouter()
-  const { bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions } = useData()
+  const { bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions, isExcluded } = useData()
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedAtleta, setSelectedAtleta] = useState('Todos')
   const [filterPosition, setFilterPosition] = useState('')
@@ -89,8 +89,8 @@ export default function BemEstarPage() {
 
   // Atletas disponíveis
   const atletas = useMemo(() => {
-    return ['Todos', ...[...new Set(bemEstarData.map(r => r.playerName))].sort()]
-  }, [bemEstarData])
+    return ['Todos', ...[...new Set(bemEstarData.map(r => r.playerName))].filter(n => n && !isExcluded(n)).sort()]
+  }, [bemEstarData, isExcluded])
 
   // Data selecionada padrão = mais recente
   const currentDate = selectedDate || dates[0] || ''
@@ -99,11 +99,12 @@ export default function BemEstarPage() {
   const filtered = useMemo(() => {
     return bemEstarData.filter(r => {
       if (r.date !== currentDate) return false
+      if (isExcluded(r.playerName)) return false
       if (selectedAtleta !== 'Todos' && r.playerName !== selectedAtleta) return false
       if (filterPosition && playerPositions[r.playerName] !== filterPosition) return false
       return true
     })
-  }, [bemEstarData, currentDate, selectedAtleta, filterPosition, playerPositions])
+  }, [bemEstarData, currentDate, selectedAtleta, filterPosition, playerPositions, isExcluded])
 
   const preData = filtered.filter(r => r.type === 'pre')
   const postData = filtered.filter(r => r.type === 'post')

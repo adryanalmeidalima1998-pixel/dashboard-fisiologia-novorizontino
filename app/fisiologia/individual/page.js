@@ -442,7 +442,7 @@ function AnatomyFigure({ activeRegions, hoveredRegion, onHover }) {
 function IndividualContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { gpsData, bemEstarData, vmaxBaseline, playerPositions: ctxPositions } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, playerPositions: ctxPositions, isExcluded } = useData()
   const [activeTab, setActiveTab] = useState('visao')
   const [hoveredRegion, setHoveredRegion] = useState(null)
   const [showPositionConfig, setShowPositionConfig] = useState(false)
@@ -460,8 +460,8 @@ function IndividualContent() {
       ...bemEstarData.map(r => r.playerName),
       ...gpsData.flatMap(s => s.rows.filter(r => !r.isOutlier).map(r => r.playerName))
     ])
-    return Array.from(names).sort()
-  }, [bemEstarData, gpsData])
+    return Array.from(names).filter(n => n && !isExcluded(n)).sort()
+  }, [bemEstarData, gpsData, isExcluded])
 
   const [selectedAthlete, setSelectedAthlete] = useState(() => searchParams.get('atleta') || '')
   const [compareAthlete, setCompareAthlete] = useState('')

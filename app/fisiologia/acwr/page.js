@@ -83,7 +83,7 @@ function AcwrTooltip({ active, payload, label }) {
 // ─── PAGINA ───────────────────────────────────────────────────────────────────
 export default function AcwrPage() {
   const router = useRouter()
-  const { gpsData, bemEstarData, playerPositions, nameAliases } = useData()
+  const { gpsData, bemEstarData, playerPositions, nameAliases, isExcluded } = useData()
 
   const [metricKey, setMetricKey]             = useState('gps')
   const [filterPosition, setFilterPosition]   = useState('')
@@ -129,8 +129,8 @@ export default function AcwrPage() {
       const norm = normalizeName(c)
       if (!seen.has(norm)) seen.set(norm, c)
     }
-    return [...seen.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [gpsData, bemEstarData, aliasNormMap])
+    return [...seen.values()].filter(a => !isExcluded(a)).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [gpsData, bemEstarData, aliasNormMap, isExcluded])
 
   // ── Mapa de carga diaria — chave = normalizeName(canonical(name)) ─────────
   // Isso garante que "Joao Pedro" e "Joao Pedro" (com/sem acento) vao para

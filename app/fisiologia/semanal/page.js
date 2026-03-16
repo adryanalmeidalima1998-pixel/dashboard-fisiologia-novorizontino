@@ -101,7 +101,7 @@ const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 export default function SemanalDashboard() {
   const router = useRouter()
-  const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions } = useData()
+  const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions, isExcluded, normalizeName: normalizeN } = useData()
   const [weekOffset, setWeekOffset] = useState(0)
   const [activeTab, setActiveTab] = useState('carga')
   const [evolucaoWeeks, setEvolucaoWeeks] = useState(12)
@@ -277,7 +277,7 @@ export default function SemanalDashboard() {
     weekGps.flatMap(s => s.rows.filter(r => r.periodNumber === 0 && !r.isOutlier).map(r => r.playerName)).forEach(addName)
     weekBemEstar.map(r => r.playerName).forEach(addName)
 
-    let list = Object.values(normToCanonical).sort()
+    let list = Object.values(normToCanonical).filter(a => !isExcluded(a)).sort()
     if (filterPosition) list = list.filter(a => playerPositions[a] === filterPosition)
     return list
   }, [weekBemEstar, weekGps, filterPosition, playerPositions])

@@ -56,7 +56,7 @@ function StatCard({ label, value, unit = '', sub, color = 'text-black', bg = 'bg
 // ─── PÁGINA ───────────────────────────────────────────────────────────────────
 export default function JogosPage() {
   const router = useRouter()
-  const { gpsData, bemEstarData, vmaxBaseline } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, isExcluded } = useData()
   const [selectedGameId, setSelectedGameId] = useState(null)
   const [activeTab, setActiveTab] = useState('gps')
 
@@ -79,7 +79,7 @@ export default function JogosPage() {
   const gameGps = useMemo(() => {
     if (!activeGame) return []
     return activeGame.rows
-      .filter(r => r.periodNumber === 0 && !r.isOutlier && r.playerName)
+      .filter(r => r.periodNumber === 0 && !r.isOutlier && r.playerName && !isExcluded(r.playerName))
       .map(r => {
         const vm = vmaxBaseline[r.playerName]
         const vmaxPct = vm ? calcVmaxPct(r.maxVelocity, vm) : null
@@ -120,7 +120,7 @@ export default function JogosPage() {
     })
     if (!weekSessions.length) return null
     const allRows = weekSessions.flatMap(s => s.rows.filter(r => r.periodNumber === 0 && !r.isOutlier))
-    const names = [...new Set(allRows.map(r => r.playerName))]
+    const names = [...new Set(allRows.map(r => r.playerName))].filter(n => n && !isExcluded(n))
     if (!names.length) return null
     const n = names.length
     return {

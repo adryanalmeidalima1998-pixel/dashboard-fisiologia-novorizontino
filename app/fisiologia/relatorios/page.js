@@ -35,7 +35,7 @@ function daysAgo(dateStr) {
 
 export default function RelatoriosPage() {
   const router = useRouter()
-  const { gpsData, bemEstarData, vmaxBaseline } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, isExcluded } = useData()
   const [activeReport, setActiveReport] = useState('pos-sessao')
   const [selectedSessionId, setSelectedSessionId] = useState(null)
   const [selectedAthlete, setSelectedAthlete] = useState('')
@@ -46,8 +46,8 @@ export default function RelatoriosPage() {
 
   const allAthletes = useMemo(() => {
     const names = new Set([...bemEstarData.map(r => r.playerName), ...gpsData.flatMap(s => s.rows.filter(r => !r.isOutlier).map(r => r.playerName))])
-    return Array.from(names).sort()
-  }, [bemEstarData, gpsData])
+    return Array.from(names).filter(n => n && !isExcluded(n)).sort()
+  }, [bemEstarData, gpsData, isExcluded])
 
   const athlete = selectedAthlete || allAthletes[0] || ''
   const sessionOptions = useMemo(() => gpsData.slice().reverse(), [gpsData])
@@ -92,7 +92,7 @@ export default function RelatoriosPage() {
     const weekBem = bemEstarData.filter(r => { const d = new Date(r.date+'T12:00:00'); return d >= monday && d <= sunday })
     const weekGps = gpsData.filter(s => { const dt = new Date(s.date?.includes('/') ? s.date.split('/').reverse().join('-')+'T12:00:00' : (s.date||'2000-01-01')+'T12:00:00'); return dt >= monday && dt <= sunday })
     const athletes = new Set([...weekBem.map(r => r.playerName), ...weekGps.flatMap(s => s.rows.filter(r => r.periodNumber===0 && !r.isOutlier).map(r => r.playerName))])
-    return Array.from(athletes).sort().map(name => {
+    return Array.from(athletes).filter(n => n && !isExcluded(n)).sort().map(name => {
       const posts = weekBem.filter(r => r.playerName === name && r.type === 'post' && r.srpeLoad)
       const wells = weekBem.filter(r => r.playerName === name && r.type === 'pre')
       const gpsRows = weekGps.flatMap(s => s.rows.filter(r => r.playerName === name && r.periodNumber === 0 && !r.isOutlier))

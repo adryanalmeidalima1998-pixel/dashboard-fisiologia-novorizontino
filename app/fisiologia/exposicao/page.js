@@ -42,7 +42,7 @@ function SortTh({ label, col, sort, onSort }) {
 
 export default function ExposicaoDashboard() {
   const router = useRouter()
-  const { gpsData, bemEstarData, vmaxBaseline, playerPositions } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, playerPositions, isExcluded } = useData()
   const [sortMain, setSortMain] = useState({ col: 'diasSemVmax90', dir: 'desc' })
   const [filterRisco, setFilterRisco] = useState(false)
   const [filterPosition, setFilterPosition] = useState('')
@@ -63,8 +63,8 @@ export default function ExposicaoDashboard() {
       ...bemEstarData.map(r => r.playerName),
       ...gpsData.flatMap(s => s.rows.filter(r => !r.isOutlier).map(r => r.playerName))
     ])
-    return Array.from(names).sort()
-  }, [bemEstarData, gpsData])
+    return Array.from(names).filter(n => n && !isExcluded(n)).sort()
+  }, [bemEstarData, gpsData, isExcluded])
 
   // Todas as linhas GPS de sessão completa (period=0)
   const allSessionRows = useMemo(() => {

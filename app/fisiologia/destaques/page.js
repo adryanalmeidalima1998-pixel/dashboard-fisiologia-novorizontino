@@ -152,7 +152,7 @@ function RankingSection({ title, emoji, athletes, metric, avg, isTop, onAthleteC
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
 export default function DestaquesDashboard() {
   const router = useRouter()
-  const { gpsData, playerPositions, vmaxBaseline } = useData()
+  const { gpsData, playerPositions, vmaxBaseline, isExcluded } = useData()
 
   // ── Estado de filtros ──────────────────────────────────────────────────────
   const [mode, setMode] = useState('sessao')          // 'sessao' | 'semanal'
@@ -206,6 +206,7 @@ export default function DestaquesDashboard() {
       for (const row of session.rows) {
         if (row.periodNumber !== 0 || row.isOutlier || !row.playerName) continue
         const name = row.playerName
+        if (isExcluded(name)) continue
         if (!map[name]) {
           map[name] = {
             name,

@@ -244,7 +244,7 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, recovery, onDetail }) {
 // ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
 export default function DiarioDashboard() {
   const router = useRouter()
-  const { gpsData, bemEstarData, vmaxBaseline, isLoadingBemEstar, fetchBemEstar, uploadGpsFile, playerPositions } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, isLoadingBemEstar, fetchBemEstar, uploadGpsFile, playerPositions, excludedNamesNorm, normalizeName } = useData()
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0])
   const [selectedGpsDate, setSelectedGpsDate] = useState(null)
   const [selectedSessionId, setSelectedSessionId] = useState(null)
@@ -289,6 +289,7 @@ export default function DiarioDashboard() {
       for (const row of session.rows) {
         if (row.periodNumber !== 0 || row.isOutlier) continue
         const name = row.playerName
+        if (excludedNamesNorm.has(normalizeName(name))) continue
         if (!map[name]) {
           map[name] = { ...row, _sessionCount: 1 }
         } else {
@@ -327,12 +328,15 @@ export default function DiarioDashboard() {
       ...Object.keys(todayBemEstar.post),
       ...Object.keys(gpsMap),
     ])
-    return Array.from(names).sort().map(name => ({
-      name,
-      pre: todayBemEstar.pre[name] || null,
-      post: todayBemEstar.post[name] || null,
-    }))
-  }, [todayBemEstar, gpsMap])
+    return Array.from(names)
+      .filter(name => !excludedNamesNorm.has(normalizeName(name)))
+      .sort()
+      .map(name => ({
+        name,
+        pre: todayBemEstar.pre[name] || null,
+        post: todayBemEstar.post[name] || null,
+      }))
+  }, [todayBemEstar, gpsMap, excludedNamesNorm])
 
   const pendingCheckin = useMemo(() => {
     const gpsNames = Object.keys(gpsMap)

@@ -113,7 +113,7 @@ function MetricBarChart({ data, metric, avg, onAthleteClick }) {
 function SessaoContent() {
   const router = useRouter()
   const params = useSearchParams()
-  const { gpsData, vmaxBaseline, playerPositions } = useData()
+  const { gpsData, vmaxBaseline, playerPositions, isExcluded } = useData()
 
   const [selectedSessionId, setSelectedSessionId] = useState(null)
   const [filterPosition, setFilterPosition] = useState('')
@@ -136,8 +136,8 @@ function SessaoContent() {
   // Rows da sessão: period=0, não-outlier
   const sessionRows = useMemo(() => {
     if (!activeSession) return []
-    return activeSession.rows.filter(r => r.periodNumber === 0 && !r.isOutlier && r.playerName)
-  }, [activeSession])
+    return activeSession.rows.filter(r => r.periodNumber === 0 && !r.isOutlier && r.playerName && !isExcluded(r.playerName))
+  }, [activeSession, isExcluded])
 
   // Atletas com dados, com vmaxPct calculado
   const athletes = useMemo(() => {
