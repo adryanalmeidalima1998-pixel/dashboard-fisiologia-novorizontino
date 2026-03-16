@@ -42,10 +42,14 @@ export default function Fisiologia() {
     gpsData, isLoadingGps, uploadStatus, uploadQueue, uploadGpsFile, uploadMultipleGpsFiles, deleteGpsSession, bulkDeleteGpsSessions,
     bemEstarData, isLoadingBemEstar, fetchBemEstar,
     nameAliases, isLoadingAliases, addNameAlias, removeNameAlias,
+    squadExclusions, excludedNamesNorm, addSquadExclusion, removeSquadExclusion, isLoadingExclusions,
   } = useData()
   const [dragOver, setDragOver] = useState(false)
   const [showCsvManager, setShowCsvManager] = useState(false)
   const [showAliasManager, setShowAliasManager] = useState(false)
+  const [showSquadManager, setShowSquadManager] = useState(false)
+  const [exclusionSearch, setExclusionSearch] = useState('')
+  const [exclusionError, setExclusionError] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
@@ -460,6 +464,27 @@ export default function Fisiologia() {
             </button>
           </div>
         )}
+
+        {/* GERENCIADOR DE ELENCO */}
+        <div className="border-2 border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">👥</span>
+            <div>
+              <p className="text-sm font-black text-black">Gerenciar Elenco Ativo</p>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                {squadExclusions.length === 0
+                  ? 'Todos os atletas estão visíveis'
+                  : `${squadExclusions.length} atleta(s) oculto(s) do dashboard`}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowSquadManager(true)}
+            className="shrink-0 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+          >
+            ⚙ Gerenciar elenco
+          </button>
+        </div>
 
         {/* MODAL DE UPLOAD COM METADADOS */}
         {pendingFiles.length > 0 && (
@@ -977,6 +1002,134 @@ export default function Fisiologia() {
             </button>
           ))}
         </div>
+
+        {/* MODAL GERENCIAR ELENCO ATIVO */}
+        {showSquadManager && (() => {
+          // Todos os atletas conhecidos (GPS + bem-estar)
+          const allKnownNorms = new Map()
+          for (const s of gpsData) for (const r of s.rows) {
+            if (r.playerName && !r.isOutlier && r.periodNumber === 0) {
+              const norm = r.playerName.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z\s]/g,'').replace(/\s+/g,' ').trim().toLowerCase()
+              if (!allKnownNorms.has(norm)) allKnownNorms.set(norm, r.playerName)
+            }
+          }
+          for (const r of bemEstarData) {
+            if (!r.playerName) continue
+            const norm = r.playerName.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z\s]/g,'').replace(/\s+/g,' ').trim().toLowerCase()
+            if (!allKnownNorms.has(norm)) allKnownNorms.set(norm, r.playerName)
+          }
+          const activeAthletes = [...allKnownNorms.entries()]
+            .filter(([norm]) => !excludedNamesNorm.has(norm))
+            .map(([, name]) => name)
+            .sort()
+          const filteredActive = exclusionSearch
+            ? activeAthletes.filter(n => n.toLowerCase().includes(exclusionSearch.toLowerCase()))
+            : activeAthletes
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col">
+
+                <div className="flex justify-between items-center mb-1">
+                  <div>
+                    <h3 className="text-base font-black uppercase tracking-tighter text-black">Elenco Ativo</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {activeAthletes.length} ativo(s) · {squadExclusions.length} oculto(s) do dashboard
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setShowSquadManager(false); setExclusionSearch(''); setExclusionError(null) }}
+                    className="text-slate-400 hover:text-slate-700 font-black text-xl leading-none"
+                  >✕</button>
+                </div>
+
+                {exclusionError && (
+                  <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-between">
+                    <span>❌ {exclusionError}</span>
+                    <button onClick={() => setExclusionError(null)} className="ml-2 font-black">✕</button>
+                  </div>
+                )}
+
+                <div className="overflow-y-auto flex-1 flex flex-col gap-4">
+
+                  {/* ATLETAS ATIVOS — clica para ocultar */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        ✅ Elenco ativo — clique para ocultar
+                      </p>
+                      <input
+                        type="text"
+                        placeholder="Buscar atleta..."
+                        value={exclusionSearch}
+                        onChange={e => setExclusionSearch(e.target.value)}
+                        className="ml-auto border border-slate-200 rounded-lg px-3 py-1 text-xs font-bold bg-white focus:border-amber-400 focus:outline-none w-40"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {filteredActive.length === 0 && (
+                        <p className="text-xs text-slate-400 italic">Nenhum atleta ativo encontrado.</p>
+                      )}
+                      {filteredActive.map(name => (
+                        <button
+                          key={name}
+                          onClick={async () => {
+                            setExclusionError(null)
+                            const result = await addSquadExclusion(name)
+                            if (!result?.success) setExclusionError(result?.error || 'Erro ao ocultar atleta.')
+                          }}
+                          className="flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700 transition-all"
+                        >
+                          {name.split(' ').slice(0, 2).join(' ')}
+                          <span className="text-[8px] opacity-50">✕</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ATLETAS OCULTOS — clica para reativar */}
+                  {squadExclusions.length > 0 && (
+                    <div className="pt-3 border-t border-slate-100">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                        🚫 Ocultos do dashboard — clique para reativar
+                      </p>
+                      <div className="flex flex-col gap-1.5">
+                        {squadExclusions.map(ex => (
+                          <div key={ex.id} className="flex items-center justify-between border border-red-200 bg-red-50 rounded-xl px-3 py-2">
+                            <span className="text-xs font-black text-red-800">{ex.player_name}</span>
+                            <button
+                              onClick={async () => {
+                                setExclusionError(null)
+                                const result = await removeSquadExclusion(ex.id)
+                                if (!result?.success) setExclusionError('Erro ao reativar atleta.')
+                              }}
+                              className="text-[10px] font-black text-green-700 bg-green-100 hover:bg-green-200 px-2.5 py-1 rounded-lg transition-all uppercase tracking-widest"
+                            >
+                              ↩ Reativar
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
+                  <p className="text-[9px] text-slate-400 font-medium">
+                    Atletas ocultos não aparecem em nenhuma página do dashboard
+                  </p>
+                  <button
+                    onClick={() => { setShowSquadManager(false); setExclusionSearch(''); setExclusionError(null) }}
+                    className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* FOOTER */}
         <footer className="flex justify-between items-center border-t-2 border-slate-900 pt-3 mt-4">
