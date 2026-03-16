@@ -118,7 +118,6 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, recovery, onDetail }) {
     ? calcVmaxPct(gpsRow.maxVelocity, vmaxBaseline[athlete.name])
     : null
 
-  // Cor e ícone do índice de recuperação
   function recoveryStyle(delta) {
     if (delta > 0.3) return { color: 'text-green-600', bg: 'bg-green-50 border-green-200', icon: '↑' }
     if (delta < -0.3) return { color: 'text-red-600',   bg: 'bg-red-50 border-red-200',   icon: '↓' }
@@ -130,7 +129,6 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, recovery, onDetail }) {
       className={`border-2 rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${hasAlert ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white hover:border-amber-400'}`}
       onClick={() => onDetail(athlete.name)}
     >
-      {/* Foto + Nome + score */}
       <div className="flex items-center gap-2.5 mb-3">
         <AthleteAvatar name={athlete.name} size="w-10 h-10" ring={!hasAlert} className={hasAlert ? 'ring-2 ring-red-400 ring-offset-1' : ''} />
         <div className="flex-1 min-w-0">
@@ -153,7 +151,6 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, recovery, onDetail }) {
         )}
       </div>
 
-      {/* Bem-estar indicators */}
       {pre && (
         <div className="grid grid-cols-5 gap-1 mb-3 pb-3 border-b border-slate-100">
           <MetricBadge label="Sono" value={pre.sono} invert={false} />
@@ -169,7 +166,6 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, recovery, onDetail }) {
         </div>
       )}
 
-      {/* Dor localizada */}
       {pre?.temDor && pre?.dorLocalizada && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-2 py-1 mb-2">
           <p className="text-[9px] font-black text-red-600 uppercase tracking-wider mb-0.5">Dor relatada</p>
@@ -177,14 +173,12 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, recovery, onDetail }) {
         </div>
       )}
 
-      {/* Hidratação */}
       {pre?.corUrina && (
         <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider mb-2 ${urinaColor(pre.corUrina)}`}>
           💧 {urinaLabel(pre.corUrina)}
         </div>
       )}
 
-      {/* GPS */}
       {gpsRow && !gpsRow.isOutlier ? (
         <div className="grid grid-cols-4 gap-1 pt-2 border-t border-slate-100">
           <div className="flex flex-col items-center">
@@ -216,7 +210,6 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, recovery, onDetail }) {
         </div>
       )}
 
-      {/* sRPE */}
       {post && (
         <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
           <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">sRPE</span>
@@ -229,7 +222,6 @@ function AthleteCard({ athlete, gpsRow, vmaxBaseline, recovery, onDetail }) {
         </div>
       )}
 
-      {/* Índice de recuperação */}
       {recovery && (
         <div className={`mt-2 pt-2 border-t border-slate-100`}>
           <div className={`flex items-center justify-between px-2 py-1 rounded-lg border ${recoveryStyle(recovery.delta).bg}`}>
@@ -265,24 +257,20 @@ export default function DiarioDashboard() {
     return Array.from(set).sort()
   }, [playerPositions])
 
-  // Datas disponíveis no GPS
   const gpsDates = useMemo(() => gpsData.map(s => s.date).sort().reverse(), [gpsData])
 
-  // Sessão GPS selecionada
   const activeGpsSession = useMemo(() => {
     if (gpsData.length === 0) return null
     const target = selectedGpsDate || gpsDates[0]
     return gpsData.find(s => s.date === target) || null
   }, [gpsData, selectedGpsDate, gpsDates])
 
-  // Sessões GPS do dia selecionado (pode haver mais de uma)
   const gpsDaySessions = useMemo(() => {
     if (!activeGpsSession) return []
     const dayDate = activeGpsSession.date
     return gpsData.filter(s => s.date === dayDate)
   }, [gpsData, activeGpsSession])
 
-  // GPS por atleta: soma de todas as sessões do dia OU sessão individual
   const gpsMap = useMemo(() => {
     if (gpsDaySessions.length === 0) return {}
     const sessionsToUse = selectedSessionId
@@ -315,7 +303,6 @@ export default function DiarioDashboard() {
     return map
   }, [gpsDaySessions, selectedSessionId])
 
-  // Bem-estar do dia selecionado
   const todayBemEstar = useMemo(() => {
     const pre = {}
     const post = {}
@@ -327,7 +314,6 @@ export default function DiarioDashboard() {
     return { pre, post }
   }, [bemEstarData, selectedDate])
 
-  // Lista de atletas combinada
   const athletes = useMemo(() => {
     const names = new Set([
       ...Object.keys(todayBemEstar.pre),
@@ -341,15 +327,11 @@ export default function DiarioDashboard() {
     }))
   }, [todayBemEstar, gpsMap])
 
-  // Atletas com GPS no dia mas SEM check-in de bem-estar (pré-treino)
   const pendingCheckin = useMemo(() => {
     const gpsNames = Object.keys(gpsMap)
     return gpsNames.filter(name => !todayBemEstar.pre[name]).sort()
   }, [gpsMap, todayBemEstar])
 
-  // ── ÍNDICE DE RECUPERAÇÃO por atleta ──────────────────────────────────────
-  // Compara o wellness pré de hoje com o wellness pré da última sessão anterior
-  // Delta positivo = atleta recuperou; negativo = piorou; null = sem histórico
   const recoveryMap = useMemo(() => {
     const map = {}
     const todayDate = selectedDate
@@ -357,7 +339,6 @@ export default function DiarioDashboard() {
       const todayScore = todayBemEstar.pre[a.name]?.wellnessScore
       if (todayScore == null) { map[a.name] = null; continue }
 
-      // Último registro pré ANTES de hoje
       const prevPre = bemEstarData
         .filter(r => r.playerName === a.name && r.type === 'pre' && r.date < todayDate && r.wellnessScore != null)
         .sort((a, b) => b.date.localeCompare(a.date))[0]
@@ -377,7 +358,6 @@ export default function DiarioDashboard() {
     return map
   }, [athletes, bemEstarData, selectedDate, todayBemEstar])
 
-  // Alertas
   const alerts = useMemo(() => {
     return athletes.filter(a => {
       const ws = a.pre?.wellnessScore
@@ -385,30 +365,63 @@ export default function DiarioDashboard() {
     })
   }, [athletes])
 
-  // ── ACWR por atleta ──────────────────────────────────────────────────────────
+  // ── ACWR por atleta — GPS distância total como carga externa ──────────────
+  // CORREÇÃO: era bemEstarData.srpeLoad + 3 semanas → agora gpsData + 4 semanas reais
   const athleteAcwr = useMemo(() => {
     const result = {}
-    const { monday: curMon, sunday: curSun } = getWeekBounds(0)
-    const allNames = athletes.map(a => a.name)
-    for (const athlete of allNames) {
-      const curLoad = bemEstarData.filter(r => {
-        if (r.playerName !== athlete || r.type !== 'post' || !r.srpeLoad) return false
-        const d = new Date(r.date + 'T12:00:00')
-        return d >= curMon && d <= curSun
-      }).reduce((s, r) => s + r.srpeLoad, 0)
-      const prevLoads = [1, 2, 3].map(w => {
-        const { monday: pm, sunday: ps } = getWeekBounds(-w)
-        return bemEstarData.filter(r => {
-          if (r.playerName !== athlete || r.type !== 'post' || !r.srpeLoad) return false
-          const d = new Date(r.date + 'T12:00:00')
-          return d >= pm && d <= ps
-        }).reduce((s, r) => s + r.srpeLoad, 0)
-      })
-      const prevAvg = prevLoads.reduce((a,b) => a+b,0) / 3
-      result[athlete] = prevAvg > 0 ? curLoad / prevAvg : null
+
+    // Parse dd/mm/yyyy ou yyyy-mm-dd → Date
+    function parseGpsDate(dateStr) {
+      if (!dateStr) return null
+      if (dateStr.includes('/')) {
+        const [d, m, y] = dateStr.split('/')
+        return new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T12:00:00`)
+      }
+      return new Date(dateStr + 'T12:00:00')
     }
+
+    for (const athlete of athletes) {
+      // 1. Monta mapa { 'yyyy-mm-dd': metros } com GPS (period 0, sem outliers)
+      const loadByDate = {}
+      for (const session of gpsData) {
+        const sessionDate = parseGpsDate(session.date)
+        if (!sessionDate || isNaN(sessionDate)) continue
+        const key = sessionDate.toISOString().split('T')[0]
+        for (const row of session.rows) {
+          if (row.playerName !== athlete.name) continue
+          if (row.periodNumber !== 0 || row.isOutlier) continue
+          if (!row.totalDistance || row.totalDistance <= 0) continue
+          loadByDate[key] = (loadByDate[key] || 0) + row.totalDistance
+        }
+      }
+
+      // 2. Carga aguda: soma dos últimos 7 dias corridos
+      const now = new Date()
+      const acuteStart = new Date(now)
+      acuteStart.setDate(now.getDate() - 6)
+      acuteStart.setHours(0, 0, 0, 0)
+
+      const acuteLoad = Object.entries(loadByDate)
+        .filter(([d]) => new Date(d + 'T12:00:00') >= acuteStart)
+        .reduce((s, [, v]) => s + v, 0)
+
+      // 3. Carga crônica: média de 4 janelas de 7 dias (28 dias)
+      const weekLoads = [0, 1, 2, 3].map(w => {
+        const wEnd   = new Date(now); wEnd.setDate(now.getDate() - w * 7);       wEnd.setHours(23, 59, 59, 999)
+        const wStart = new Date(now); wStart.setDate(now.getDate() - w * 7 - 6); wStart.setHours(0, 0, 0, 0)
+        return Object.entries(loadByDate)
+          .filter(([d]) => { const dt = new Date(d + 'T12:00:00'); return dt >= wStart && dt <= wEnd })
+          .reduce((s, [, v]) => s + v, 0)
+      })
+
+      const chronicLoad = weekLoads.reduce((a, b) => a + b, 0) / 4
+
+      // null quando sem histórico — evita 0.00 falso no semáforo
+      result[athlete.name] = chronicLoad > 0 ? parseFloat((acuteLoad / chronicLoad).toFixed(3)) : null
+    }
+
     return result
-  }, [bemEstarData, athletes])
+  }, [gpsData, athletes])
 
   // ── Readiness map ─────────────────────────────────────────────────────────────
   const readinessMap = useMemo(() => {
@@ -435,7 +448,6 @@ export default function DiarioDashboard() {
     return list
   }, [filterAlert, alerts, athletes, filterPosition, playerPositions])
 
-  // Datas disponíveis no bem-estar
   const bemEstarDates = useMemo(() => {
     const dates = [...new Set(bemEstarData.map(r => r.date))].sort().reverse()
     return dates
@@ -545,7 +557,6 @@ export default function DiarioDashboard() {
             </select>
           )}
 
-          {/* Toggle: Cards / Semáforo */}
           <div className="ml-auto flex bg-slate-100 rounded-xl p-1 gap-1">
             {[
               { id: 'cards',    label: '🃏 Cards' },
@@ -565,7 +576,6 @@ export default function DiarioDashboard() {
         {/* ── SEMÁFORO DE PRONTIDÃO ────────────────────────────────────────────── */}
         {viewMode === 'semaforo' && athletes.length > 0 && (
           <div className="flex flex-col gap-4">
-            {/* KPI do semáforo */}
             <div className="grid grid-cols-3 gap-3">
               {[
                 { label: '🟢 Treino Normal',    count: displayed.filter(a => readinessMap[a.name]?.score >= 75).length,   bg: 'bg-green-50 border-green-200',  text: 'text-green-700' },
@@ -580,7 +590,6 @@ export default function DiarioDashboard() {
               ))}
             </div>
 
-            {/* Grade do semáforo */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               {[...displayed]
                 .sort((a, b) => (readinessMap[b.name]?.score || 0) - (readinessMap[a.name]?.score || 0))
@@ -611,7 +620,6 @@ export default function DiarioDashboard() {
                         </div>
                       </div>
 
-                      {/* Barra de score */}
                       <div className="h-2 bg-white/60 rounded-full overflow-hidden mb-2">
                         <div
                           className="h-full rounded-full transition-all"
@@ -619,7 +627,6 @@ export default function DiarioDashboard() {
                         />
                       </div>
 
-                      {/* Motivos */}
                       {r.reasons.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {r.reasons.slice(0, 3).map((reason, i) => (
@@ -630,7 +637,6 @@ export default function DiarioDashboard() {
                         </div>
                       )}
 
-                      {/* ACWR badge */}
                       {athleteAcwr[a.name] != null && (
                         <p className="text-[9px] font-bold text-slate-500 mt-1">
                           ACWR: <span className="font-black">{athleteAcwr[a.name].toFixed(2)}</span>
@@ -641,12 +647,12 @@ export default function DiarioDashboard() {
                 })}
             </div>
             <p className="text-[10px] font-bold text-slate-400">
-              Score = Wellness (50%) + ACWR (30%) + Dias de descanso (20%) · Clique em qualquer atleta para o perfil individual
+              Score = Wellness (50%) + ACWR GPS (30%) + Dias de descanso (20%) · Clique em qualquer atleta para o perfil individual
             </p>
           </div>
         )}
 
-        {/* RESUMO DO DIA — só aparece no modo cards */}
+        {/* RESUMO DO DIA */}
         {viewMode === 'cards' && athletes.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
@@ -681,7 +687,7 @@ export default function DiarioDashboard() {
           </div>
         )}
 
-        {/* PAINEL AGUARDANDO CHECK-IN — só no modo cards, quando há GPS mas sem bem-estar */}
+        {/* AGUARDANDO CHECK-IN */}
         {viewMode === 'cards' && pendingCheckin.length > 0 && (
           <div className="border-2 border-blue-200 bg-blue-50 rounded-xl p-4">
             <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -714,7 +720,7 @@ export default function DiarioDashboard() {
           </div>
         )}
 
-        {/* ALERTAS DESTAQUE — só no modo cards */}
+        {/* ALERTAS DESTAQUE */}
         {viewMode === 'cards' && alerts.length > 0 && (
           <div className="border-2 border-red-300 bg-red-50 rounded-xl p-4">
             <p className="text-xs font-black uppercase tracking-widest text-red-600 mb-3">⚠ Atletas que precisam de atenção hoje</p>
@@ -733,7 +739,7 @@ export default function DiarioDashboard() {
           </div>
         )}
 
-        {/* GRID DE ATLETAS — só no modo cards */}
+        {/* GRID DE ATLETAS */}
         {viewMode === 'cards' && (displayed.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {displayed.map(athlete => (
@@ -764,7 +770,7 @@ export default function DiarioDashboard() {
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 bg-amber-500 rounded-full" />
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-              Score bem-estar = média(sono, 6-fadiga, 6-doms, 6-estresse, humor) | Vmax% = sessão / baseline histórico
+              Score bem-estar = média(sono, 6-fadiga, 6-doms, 6-estresse, humor) | ACWR = GPS distância 7d / média 4 semanas | Vmax% = sessão / baseline histórico
             </span>
           </div>
           <p className="text-[10px] text-slate-500 font-black italic tracking-tight uppercase">© Fisiologia GN</p>
