@@ -257,7 +257,14 @@ export default function DiarioDashboard() {
     return Array.from(set).sort()
   }, [playerPositions])
 
-  const gpsDates = useMemo(() => gpsData.map(s => s.date).sort().reverse(), [gpsData])
+  const gpsDates = useMemo(() => {
+    return [...new Set(gpsData.map(s => s.date))]
+      .sort((a, b) => {
+        const sa = a.includes("/") ? a.split("/").reverse().join("-") : a
+        const sb = b.includes("/") ? b.split("/").reverse().join("-") : b
+        return sb.localeCompare(sa)
+      })
+  }, [gpsData])
 
   const activeGpsSession = useMemo(() => {
     if (gpsData.length === 0) return null
@@ -427,11 +434,15 @@ export default function DiarioDashboard() {
   const readinessMap = useMemo(() => {
     const map = {}
     for (const a of athletes) {
+      // Converte para yyyy-mm-dd antes de ordenar — dd/mm/yyyy não ordena lexicograficamente
       const lastGpsDates = gpsData
         .filter(s => s.rows.some(r => r.playerName === a.name && r.periodNumber === 0 && !r.isOutlier))
-        .map(s => s.date)
-        .sort().reverse()
-      const lastGps = lastGpsDates[0]
+        .map(s => ({
+          original: s.date,
+          sortable: s.date.includes('/') ? s.date.split('/').reverse().join('-') : s.date,
+        }))
+        .sort((x, y) => y.sortable.localeCompare(x.sortable))
+      const lastGps = lastGpsDates[0]?.original
       let daysSince = null
       if (lastGps) {
         const d = lastGps.includes('/') ? new Date(lastGps.split('/').reverse().join('-') + 'T12:00:00') : new Date(lastGps + 'T12:00:00')
