@@ -55,7 +55,6 @@ export default function Fisiologia() {
   const [aliasError, setAliasError] = useState(null)
   const [manualGps, setManualGps] = useState('')
   const [manualBem, setManualBem] = useState('')
-  // pendingFiles: array de { file, name, meta: { sessionType, sessionPeriod, opponent, result } }
   const [pendingFiles, setPendingFiles] = useState([])
   const [editingIdx, setEditingIdx] = useState(null)
 
@@ -63,7 +62,6 @@ export default function Fisiologia() {
     if (bemEstarData.length === 0) fetchBemEstar()
   }, [])
 
-  // Nomes únicos GPS vs bem-estar para detectar divergências
   const gpsNames = useMemo(() => {
     const names = new Set()
     for (const s of gpsData) for (const r of s.rows) if (r.playerName) names.add(r.playerName)
@@ -74,21 +72,18 @@ export default function Fisiologia() {
     return [...new Set(bemEstarData.map(r => r.playerName).filter(Boolean))].sort()
   }, [bemEstarData])
 
-  // Nomes GPS que não têm correspondência exata no bem-estar (potencialmente duplicados)
   const unmatchedGpsNames = useMemo(() => {
     const bemNormed = new Set(bemNames.map(n => normalizeName(n)))
     const aliasedGps = new Set(nameAliases.map(a => a.gps_name))
     return gpsNames.filter(n => !bemNormed.has(normalizeName(n)) && !aliasedGps.has(n))
   }, [gpsNames, bemNames, nameAliases])
 
-  // Sugestões automáticas de matches
   const suggestions = useMemo(() => {
     if (!gpsNames.length || !bemNames.length) return []
     return suggestNameMatches(gpsNames, bemNames, nameAliases)
   }, [gpsNames, bemNames, nameAliases])
 
   // ── PRONTIDÃO DA EQUIPE HOJE ──────────────────────────────────────────────────
-  // Calcula score de prontidão para cada atleta com bem-estar de hoje
   const teamReadiness = useMemo(() => {
     if (!bemEstarData.length) return null
     const todayStr = new Date().toISOString().split('T')[0]
@@ -99,7 +94,6 @@ export default function Fisiologia() {
     if (Object.keys(todayPre).length === 0) return null
 
     const scores = Object.entries(todayPre).map(([name, preData]) => {
-      // ACWR simples: carga semana atual / média 3 semanas anteriores
       const today = new Date()
       const dow = today.getDay() === 0 ? 6 : today.getDay() - 1
       const monday = new Date(today); monday.setDate(today.getDate() - dow); monday.setHours(0,0,0,0)
@@ -112,7 +106,6 @@ export default function Fisiologia() {
       const prevAvg = prevLoads.reduce((a,b) => a+b,0) / 3
       const acwr = prevAvg > 0 ? curLoad / prevAvg : null
 
-      // Dias desde último GPS
       const lastGpsDates = gpsData.flatMap(s => s.rows.filter(r => r.playerName === name && r.periodNumber === 0 && !r.isOutlier).map(() => s.date)).sort().reverse()
       const lastGps = lastGpsDates[0]
       let daysSince = null
@@ -184,6 +177,17 @@ export default function Fisiologia() {
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      )
+    },
+    {
+      id: 'acwr',
+      titulo: 'ACWR — Carga Aguda:Crônica',
+      descricao: 'Razão Aguda:Crônica por atleta via GPS. Zonas de risco, tendência histórica, monotonia e strain.',
+      rota: '/fisiologia/acwr',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
       )
     },
@@ -291,7 +295,6 @@ export default function Fisiologia() {
 
   const isUploading = uploadQueue.some(q => q.status === 'uploading')
 
-  // Badge visual de tipo/turno da sessão
   function SessionBadge({ session }) {
     const meta = session.metadata || {}
     const isJogo = meta.type === 'jogo'
@@ -411,7 +414,6 @@ export default function Fisiologia() {
               )}
             </div>
 
-            {/* Fila de upload */}
             {uploadQueue.length > 0 && (
               <div className="mt-2 flex flex-col gap-1">
                 {uploadQueue.map((item, i) => (
@@ -424,7 +426,6 @@ export default function Fisiologia() {
               </div>
             )}
 
-            {/* Feedback upload único */}
             {uploadStatus && uploadQueue.length === 0 && (
               <div className={`mt-2 text-xs font-bold px-2 py-1.5 rounded-lg ${uploadStatus.type === 'success' ? 'bg-green-100 text-green-700' : uploadStatus.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                 {uploadStatus.message}
@@ -474,7 +475,6 @@ export default function Fisiologia() {
               <div className="flex flex-col gap-5 mb-5">
                 {pendingFiles.map((p, i) => (
                   <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
-                    {/* Número + Nome */}
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-[10px] text-slate-400 font-black w-5 text-right shrink-0">{i + 1}.</span>
                       {editingIdx === i ? (
@@ -502,9 +502,7 @@ export default function Fisiologia() {
                       >✕</button>
                     </div>
 
-                    {/* Metadados em linha */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {/* Tipo */}
                       <div>
                         <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Tipo</label>
                         <div className="flex gap-1">
@@ -517,7 +515,6 @@ export default function Fisiologia() {
                         </div>
                       </div>
 
-                      {/* Turno */}
                       <div>
                         <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Turno</label>
                         <div className="flex gap-1">
@@ -530,7 +527,6 @@ export default function Fisiologia() {
                         </div>
                       </div>
 
-                      {/* Adversário (só se jogo) */}
                       {p.meta.sessionType === 'jogo' && (
                         <div>
                           <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Adversário</label>
@@ -544,7 +540,6 @@ export default function Fisiologia() {
                         </div>
                       )}
 
-                      {/* Resultado (só se jogo) */}
                       {p.meta.sessionType === 'jogo' && (
                         <div>
                           <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Resultado</label>
@@ -584,7 +579,6 @@ export default function Fisiologia() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200 p-6 w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
 
-              {/* Cabeçalho */}
               <div className="flex justify-between items-center mb-3">
                 <div>
                   <h3 className="text-base font-black uppercase tracking-tighter text-black">Sessões GPS Armazenadas</h3>
@@ -596,7 +590,6 @@ export default function Fisiologia() {
                 <button onClick={() => { setShowCsvManager(false); setDeleteError(null); setConfirmDeleteId(null); setSelectedIds(new Set()) }} className="text-slate-400 hover:text-slate-700 font-black text-xl leading-none">✕</button>
               </div>
 
-              {/* Barra de ações em lote */}
               {gpsData.length > 0 && (
                 <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-100">
                   <button
@@ -635,7 +628,6 @@ export default function Fisiologia() {
                 </div>
               )}
 
-              {/* Erro global */}
               {deleteError && (
                 <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-between">
                   <span>❌ {deleteError}</span>
@@ -643,7 +635,6 @@ export default function Fisiologia() {
                 </div>
               )}
 
-              {/* Lista de sessões */}
               <div className="overflow-y-auto flex-1 flex flex-col gap-2">
                 {gpsData.length === 0 ? (
                   <div className="text-center py-12 text-slate-400 text-sm">Nenhuma sessão armazenada.</div>
@@ -674,7 +665,6 @@ export default function Fisiologia() {
                           setConfirmDeleteId(null)
                         }}
                       >
-                        {/* Checkbox */}
                         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${isSelected ? 'bg-amber-500 border-amber-500' : 'border-slate-300'}`}>
                           {isSelected && <span className="text-white text-xs font-black leading-none">✓</span>}
                         </div>
@@ -699,7 +689,6 @@ export default function Fisiologia() {
                           </div>
                         </div>
 
-                        {/* Botão excluir individual */}
                         <div className="shrink-0" onClick={e => e.stopPropagation()}>
                           {isConfirming ? (
                             <div className="flex items-center gap-1">
@@ -734,7 +723,6 @@ export default function Fisiologia() {
                 )}
               </div>
 
-              {/* Footer */}
               <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-100">
                 <label className="cursor-pointer bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all">
                   + Upload novo CSV
@@ -777,7 +765,6 @@ export default function Fisiologia() {
 
               <div className="overflow-y-auto flex-1 flex flex-col gap-5">
 
-                {/* SUGESTÕES AUTOMÁTICAS */}
                 {suggestions.length > 0 && (
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">✨ Sugestões automáticas — clique para confirmar</p>
@@ -816,7 +803,6 @@ export default function Fisiologia() {
                   </div>
                 )}
 
-                {/* ALIASES ATIVOS */}
                 {nameAliases.length > 0 && (
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">✅ Vínculos ativos ({nameAliases.length})</p>
@@ -841,7 +827,6 @@ export default function Fisiologia() {
                   </div>
                 )}
 
-                {/* NOMES GPS SEM MATCH */}
                 {unmatchedGpsNames.length > 0 && (
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">📡 Nomes GPS sem correspondência no bem-estar</p>
@@ -857,7 +842,6 @@ export default function Fisiologia() {
                   </div>
                 )}
 
-                {/* VÍNCULO MANUAL */}
                 <div className="border-2 border-slate-200 rounded-xl p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">🔗 Criar vínculo manual</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
@@ -921,7 +905,6 @@ export default function Fisiologia() {
             onClick={() => router.push('/fisiologia/diario')}
           >
             <div className="flex items-center justify-between flex-wrap gap-4">
-              {/* Score principal */}
               <div className="flex items-center gap-4">
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black flex-shrink-0 ${
                   teamReadiness.avg >= 75 ? 'bg-green-100 text-green-700 border-2 border-green-300' :
@@ -941,9 +924,7 @@ export default function Fisiologia() {
                 </div>
               </div>
 
-              {/* Distribuição */}
               <div className="flex items-center gap-3">
-                {/* Barra de distribuição */}
                 <div className="flex flex-col gap-1.5">
                   <div className="flex h-3 rounded-full overflow-hidden w-48 bg-slate-100">
                     {teamReadiness.green > 0 && (
