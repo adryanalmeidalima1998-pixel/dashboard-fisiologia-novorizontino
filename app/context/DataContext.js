@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
 import Papa from 'papaparse'
 
 const DataContext = createContext(null)
@@ -46,8 +46,6 @@ export function getCanonicalName(name) {
 }
 
 // ─── SUGESTÃO AUTOMÁTICA DE ALIASES ──────────────────────────────────────────
-// Compara tokens: "FELIPE SAMOGIM" → ["felipe","samogim"]
-// Se todos os tokens do nome menor estão no maior → provável mesmo atleta
 export function suggestNameMatches(gpsNames, bemNames, existingAliases) {
   const aliasedGpsNames = new Set(existingAliases.map(a => a.gps_name))
   const suggestions = []
@@ -55,7 +53,6 @@ export function suggestNameMatches(gpsNames, bemNames, existingAliases) {
   for (const gpsName of gpsNames) {
     if (aliasedGpsNames.has(gpsName)) continue
     const gpsNorm = normalizeName(gpsName)
-    // skip if already matches a bem-estar name exactly
     if (bemNames.some(b => normalizeName(b) === gpsNorm)) continue
 
     const gpsTokens = gpsNorm.split(' ').filter(Boolean)
@@ -68,26 +65,23 @@ export function suggestNameMatches(gpsNames, bemNames, existingAliases) {
       const shorter = gpsTokens.length <= bemTokens.length ? gpsTokens : bemTokens
       const longer  = gpsTokens.length <= bemTokens.length ? bemTokens : gpsTokens
 
-      // All tokens of shorter name must appear in longer name
-      // AND shorter must have at least 2 tokens (avoid false positives)
       if (shorter.length >= 2 && shorter.every(t => longer.includes(t))) {
         suggestions.push({
           gpsName,
           bemName,
-          confidence: shorter.length / longer.length, // higher = more similar
+          confidence: shorter.length / longer.length,
         })
       }
     }
   }
 
-  // Sort by confidence desc, deduplicate (keep best match per gpsName)
   const seen = new Set()
   return suggestions
     .sort((a, b) => b.confidence - a.confidence)
     .filter(s => { if (seen.has(s.gpsName)) return false; seen.add(s.gpsName); return true })
 }
 
-// ─── BEM-ESTAR PARSER (client-side, Google Sheets) ────────────────────────────
+// ─── BEM-ESTAR PARSER ────────────────────────────────────────────────────────
 export function parseBemEstarCSV(csvText) {
   const { data } = Papa.parse(csvText, { header: true, skipEmptyLines: true })
 
@@ -98,8 +92,6 @@ export function parseBemEstarCSV(csvText) {
     if (rawTs.match(/^\d{2}\/\d{2}\/\d{4}/)) {
       const [datePart, timePart = '00:00:00'] = rawTs.split(' ')
       const [dd, mm, yyyy] = datePart.split('/')
-      // Usa a data LOCAL do formulário diretamente (dd/mm/yyyy) em vez de toISOString()
-      // que converte para UTC e pode trocar o dia em respostas noturnas (fuso Brasília UTC-3)
       date = `${yyyy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`
       timestamp = new Date(`${yyyy}-${mm}-${dd}T${timePart}`)
     } else {
@@ -107,17 +99,14 @@ export function parseBemEstarCSV(csvText) {
       date = !isNaN(timestamp) ? timestamp.toISOString().split('T')[0] : null
     }
     if (!date) return null
-    // Normaliza o campo Atividade: tolera acentos, hífen, espaço e capitalização
-    // ex: "Pós-Atividade", "Pós Atividade", "pos atividade", "POST" -> todos detectados
+
     const _atividadeRaw = row['Atividade:'] || ''
     const _atividadeNorm = _atividadeRaw
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
-      .replace(/[-_]/g, ' ')                              // hífen/underscore -> espaço
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[-_]/g, ' ')
       .trim().toLowerCase()
     const isPre  = _atividadeNorm.includes('pre')
     const isPost = _atividadeNorm.includes('pos') || _atividadeNorm.includes('post')
-    // Se nenhum dos dois bateu, tenta detectar pelo conteúdo:
-    // sRPE preenchido = Pós-Atividade; Wellness preenchido sem sRPE = Pré-Atividade
     const _hasSrpe    = !!(row['Percepção Subjetiva de Esforço:'] || '').trim()
     const _hasWellness = !!(row['Fadiga'] || row['Qualidade do Sono'] || row['Humor'] || '').toString().trim()
     const _isPre  = isPre  || (!isPost && _hasWellness && !_hasSrpe)
@@ -152,7 +141,7 @@ export function parseBemEstarCSV(csvText) {
     return {
       timestamp,
       date,
-      playerName: rawName,           // mantém original para exibição
+      playerName: rawName,
       _normalizedName: normalizeName(rawName),
       type: _isPre ? 'pre' : _isPost ? 'post' : 'unknown',
       fadiga, sono, doms, estresse, humor, corUrina,
@@ -166,7 +155,6 @@ export function parseBemEstarCSV(csvText) {
 }
 
 // ─── CÁLCULOS ─────────────────────────────────────────────────────────────────
-// ─── APLICA ALIASES AOS DADOS GPS ────────────────────────────────────────────
 export function applyAliasesToSessions(sessions, aliases) {
   if (!aliases || aliases.length === 0) return sessions
   const aliasMap = {}
@@ -212,10 +200,72 @@ export function DataProvider({ children }) {
 
   const [vmaxBaseline, setVmaxBaseline] = useState({})
   const [canonicalMap, setCanonicalMap] = useState({})
-  const [nameAliases, setNameAliases] = useState([]) // [{id, gps_name, bem_name}]
+  const [nameAliases, setNameAliases] = useState([])
   const [isLoadingAliases, setIsLoadingAliases] = useState(false)
 
+  // ── EXCLUSÕES DE ELENCO ───────────────────────────────────────────────────
+  const [squadExclusions, setSquadExclusions] = useState([]) // [{id, player_name, normalized_name}]
+  const [isLoadingExclusions, setIsLoadingExclusions] = useState(false)
+
+  // Set de nomes normalizados excluídos — use este para filtrar qualquer lista de atletas
+  const excludedNamesNorm = useMemo(() => {
+    return new Set(squadExclusions.map(e => e.normalized_name))
+  }, [squadExclusions])
+
+  // Helper: retorna true se o atleta está excluído do elenco
+  const isExcluded = useCallback((name) => {
+    return excludedNamesNorm.has(normalizeName(name))
+  }, [excludedNamesNorm])
+
   const SHEETS_URL = '/api/bem-estar'
+
+  // ── Carregar exclusões ────────────────────────────────────────────────────
+  const fetchSquadExclusions = useCallback(async () => {
+    setIsLoadingExclusions(true)
+    try {
+      const res = await fetch('/api/squad-exclusions')
+      if (!res.ok) return
+      const { exclusions } = await res.json()
+      setSquadExclusions(exclusions || [])
+    } catch (e) {
+      console.error('Erro ao buscar exclusões:', e)
+    } finally {
+      setIsLoadingExclusions(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchSquadExclusions() }, [fetchSquadExclusions])
+
+  const addSquadExclusion = useCallback(async (playerName) => {
+    try {
+      const res = await fetch('/api/squad-exclusions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_name: playerName }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { success: false, error: data.error }
+      setSquadExclusions(prev => {
+        const norm = normalizeName(playerName)
+        const next = prev.filter(e => e.normalized_name !== norm)
+        return [...next, data.exclusion]
+      })
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: 'Falha de rede.' }
+    }
+  }, [])
+
+  const removeSquadExclusion = useCallback(async (id) => {
+    try {
+      const res = await fetch(`/api/squad-exclusions/${id}`, { method: 'DELETE' })
+      if (!res.ok) return { success: false }
+      setSquadExclusions(prev => prev.filter(e => e.id !== id))
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: 'Falha de rede.' }
+    }
+  }, [])
 
   // ── Carregar sessões GPS ──────────────────────────────────────────────────
   const fetchGpsSessions = useCallback(async () => {
@@ -286,7 +336,7 @@ export function DataProvider({ children }) {
     }
   }, [])
 
-  // Recalcula mapa canônico quando ambas as fontes estão disponíveis
+  // Recalcula mapa canônico
   useEffect(() => {
     if (gpsData.length > 0 || bemEstarData.length > 0) {
       const map = buildCanonicalMap(gpsData, bemEstarData)
@@ -314,17 +364,14 @@ export function DataProvider({ children }) {
     try {
       const res = await fetch('/api/gps/upload', { method: 'POST', body: formData })
       const data = await res.json()
-
       if (!res.ok || data.error) {
         setUploadStatus({ type: 'error', message: data.error || 'Erro ao processar CSV.' })
         return false
       }
-
       setUploadStatus({ type: 'success', message: data.message })
       await fetchGpsSessions()
       setTimeout(() => setUploadStatus(null), 5000)
       return true
-
     } catch (e) {
       setUploadStatus({ type: 'error', message: 'Falha na conexão com o servidor.' })
       return false
@@ -359,7 +406,6 @@ export function DataProvider({ children }) {
       try {
         const res = await fetch('/api/gps/upload', { method: 'POST', body: formData })
         const data = await res.json()
-
         if (!res.ok || data.error) {
           setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'error', message: data.error || 'Erro' } : q))
         } else {
@@ -379,10 +425,7 @@ export function DataProvider({ children }) {
     try {
       const res = await fetch(`/api/gps/sessions/${id}`, { method: 'DELETE' })
       const data = await res.json()
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Erro ao excluir sessão.' }
-      }
-      // Atualiza estado local imediatamente (otimista)
+      if (!res.ok) return { success: false, error: data.error || 'Erro ao excluir sessão.' }
       setGpsData(prev => {
         const next = prev.filter(s => s.id !== id)
         setVmaxBaseline(calcVmaxBaseline(next))
@@ -390,7 +433,6 @@ export function DataProvider({ children }) {
       })
       return { success: true }
     } catch (e) {
-      console.error('Erro ao deletar sessão:', e)
       return { success: false, error: 'Falha de rede.' }
     }
   }, [])
@@ -404,9 +446,7 @@ export function DataProvider({ children }) {
         body: JSON.stringify({ ids }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Erro ao excluir sessões.' }
-      }
+      if (!res.ok) return { success: false, error: data.error || 'Erro ao excluir sessões.' }
       setGpsData(prev => {
         const next = prev.filter(s => !ids.includes(s.id))
         setVmaxBaseline(calcVmaxBaseline(next))
@@ -414,7 +454,6 @@ export function DataProvider({ children }) {
       })
       return { success: true, deleted: data.deleted }
     } catch (e) {
-      console.error('Erro ao deletar sessões em lote:', e)
       return { success: false, error: 'Falha de rede.' }
     }
   }, [])
@@ -435,39 +474,37 @@ export function DataProvider({ children }) {
     }
   }, [])
 
-  // ── Busca de bem-estar por nome (com normalização) ────────────────────────
-  // Use esta função em vez de filtrar por playerName diretamente
   const getBemEstarForAthlete = useCallback((targetName) => {
     const normTarget = normalizeName(targetName)
     return bemEstarData.filter(r => normalizeName(r.playerName) === normTarget)
   }, [bemEstarData])
 
-  // ── Lista de atletas unificada (sem duplicatas por variação de nome) ──────
+  // ── Lista de atletas unificada — SEM os excluídos ────────────────────────
   const getUnifiedAthletes = useCallback(() => {
     const seen = new Set()
     const result = []
-    // GPS é fonte primária para nome canônico
     for (const session of gpsData) {
       for (const row of session.rows) {
         if (!row.playerName || row.isOutlier) continue
         const norm = normalizeName(row.playerName)
+        if (excludedNamesNorm.has(norm)) continue // ← filtra excluídos
         if (!seen.has(norm)) {
           seen.add(norm)
           result.push(row.playerName)
         }
       }
     }
-    // Bem-estar: adiciona quem não tem GPS
     for (const r of bemEstarData) {
       if (!r.playerName) continue
       const norm = normalizeName(r.playerName)
+      if (excludedNamesNorm.has(norm)) continue // ← filtra excluídos
       if (!seen.has(norm)) {
         seen.add(norm)
         result.push(r.playerName)
       }
     }
     return result.sort()
-  }, [gpsData, bemEstarData])
+  }, [gpsData, bemEstarData, excludedNamesNorm])
 
   return (
     <DataContext.Provider value={{
@@ -508,6 +545,14 @@ export function DataProvider({ children }) {
       fetchNameAliases,
       suggestNameMatches,
       applyAliasesToSessions,
+      // ── Exclusões de elenco ──────────────────────────────────────────────
+      squadExclusions,
+      excludedNamesNorm,
+      isExcluded,
+      isLoadingExclusions,
+      addSquadExclusion,
+      removeSquadExclusion,
+      fetchSquadExclusions,
     }}>
       {children}
     </DataContext.Provider>
