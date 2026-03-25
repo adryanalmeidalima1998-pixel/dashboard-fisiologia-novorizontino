@@ -297,7 +297,7 @@ export default function CMJPage() {
           </button>
           <div className="flex-1">
             <h1 className="text-base font-bold text-slate-800 leading-tight">Índice de Fadiga — CMJ</h1>
-            <p className="text-xs text-slate-400">Pré-jogo · Counter Movement Jump · GPS integrado</p>
+            <p className="text-xs text-slate-400">Coleta Diária · Counter Movement Jump · GPS integrado</p>
           </div>
           {alertCount > 0 && (
             <div className="bg-red-100 text-red-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
@@ -498,7 +498,7 @@ export default function CMJPage() {
 
                     {/* Histórico de coletas */}
                     <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                      Histórico de coletas pré-jogo
+                    Histórico de coletas diárias
                     </h4>
                     {focusedData.coletas.length === 0 ? (
                       <p className="text-xs text-slate-400 py-2">Nenhuma coleta registrada ainda.</p>
@@ -551,7 +551,7 @@ export default function CMJPage() {
         {activeTab === 'registrar' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 max-w-md mx-auto">
             <h2 className="font-semibold text-slate-700 mb-5 flex items-center gap-2">
-              <span className="text-lg">🦵</span> Coleta Pré-Jogo
+              <span className="text-lg">🦵</span> Coleta Diária
             </h2>
             <div className="space-y-4">
 
