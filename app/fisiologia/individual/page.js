@@ -1,4 +1,5 @@
 'use client'
+import React from 'react'
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useMemo, Suspense } from 'react'
@@ -898,6 +899,7 @@ function IndividualContent() {
           { id: 'bemEstar', label: 'Bem-Estar' },
           { id: 'dor', label: `Dor Localizada${Object.keys(painCodeMap).length > 0 ? ` (${Object.keys(painCodeMap).length} regiões)` : ''}` },
           { id: 'lesoes', label: `📅 Histórico de Lesões${painHistory.length > 0 ? ` (${painHistory.length})` : ''}` },
+          { id: 'cmj', label: '🦵 CMJ — Fadiga' },
         ].map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
             className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${activeTab === t.id ? 'border-b-2 border-amber-500 text-black' : 'text-slate-400 hover:text-slate-600'}`}>
@@ -1416,7 +1418,112 @@ function IndividualContent() {
         </div>
       )}
       {/* ── HISTÓRICO DE LESÕES ── */}
-      {activeTab === 'lesoes' && (() => {
+      {activeTab === 'cmj' && (() => {
+        const norm = normalizeName(athlete)
+        const minhasColetas = cmjColetas.filter(c => normalizeName(c.athlete_name) === norm)
+        const sorted = [...minhasColetas].sort((a, b) => new Date(b.data_coleta) - new Date(a.data_coleta))
+        const melhor = minhasColetas.length ? Math.max(...minhasColetas.map(c => c.media)) : null
+
+        function calcFadigaCmj(media, best) {
+          if (!media || !best) return null
+          return Math.round(((media - best) / best) * 1000) / 10
+        }
+        function getZoneCmj(pct) {
+          if (pct === null || pct === undefined) return null
+          if (pct >= -5)  return { label: 'NORMAL',          text: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-300',  badge: 'bg-green-100 text-green-700'   }
+          if (pct >= -10) return { label: 'ATENÇÃO',         text: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-300',  badge: 'bg-amber-100 text-amber-700'   }
+          if (pct >= -15) return { label: 'FADIGA MODERADA', text: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-300', badge: 'bg-orange-100 text-orange-700' }
+          return            { label: 'ALTO RISCO',      text: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-300',    badge: 'bg-red-100 text-red-700'       }
+        }
+
+        const ultimaColeta = sorted[0] || null
+        const ultimaPct    = ultimaColeta && melhor ? calcFadigaCmj(ultimaColeta.media, melhor) : null
+        const ultimaZone   = getZoneCmj(ultimaPct)
+
+        return (
+          <div>
+            {/* KPI topo */}
+            {sorted.length === 0 ? (
+              <div className="text-center py-16 text-slate-400">
+                <p className="text-sm font-black uppercase tracking-widest">Sem coletas CMJ registradas para este atleta</p>
+                <p className="text-xs font-bold mt-1">Registre coletas na página de Índice de Fadiga</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                  <div className="border-2 border-slate-200 rounded-xl p-4 text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Melhor Histórico</p>
+                    <p className="text-3xl font-black font-mono text-black">{melhor ?? '—'}</p>
+                    <p className="text-[9px] font-black text-slate-400">cm</p>
+                  </div>
+                  <div className="border-2 border-slate-200 rounded-xl p-4 text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Última Coleta</p>
+                    <p className="text-3xl font-black font-mono text-black">{ultimaColeta?.media ?? '—'}</p>
+                    <p className="text-[9px] font-black text-slate-400">cm</p>
+                  </div>
+                  <div className={`border-2 rounded-xl p-4 text-center ${ultimaZone ? ultimaZone.border + ' ' + ultimaZone.bg : 'border-slate-200'}`}>
+                    <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${ultimaZone ? ultimaZone.text : 'text-slate-400'}`}>Fadiga Atual</p>
+                    <p className={`text-3xl font-black ${ultimaZone ? ultimaZone.text : 'text-slate-300'}`}>
+                      {ultimaPct !== null ? `${ultimaPct > 0 ? '+' : ''}${ultimaPct}%` : '—'}
+                    </p>
+                    {ultimaZone && <p className={`text-[9px] font-black uppercase ${ultimaZone.text}`}>{ultimaZone.label}</p>}
+                  </div>
+                  <div className="border-2 border-slate-200 rounded-xl p-4 text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Total Coletas</p>
+                    <p className="text-3xl font-black font-mono text-black">{sorted.length}</p>
+                    <p className="text-[9px] font-black text-slate-400">registros</p>
+                  </div>
+                </div>
+
+                {/* Histórico */}
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Histórico de Coletas</p>
+                <div className="border-2 border-slate-200 rounded-2xl overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b-2 border-slate-200 bg-slate-50">
+                        {['Data', 'T1 (cm)', 'T2 (cm)', 'T3 (cm)', 'Média', 'Melhor ref.', 'Fadiga', 'Zona'].map(h => (
+                          <th key={h} className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {sorted.map((c, i) => {
+                        const p = melhor ? calcFadigaCmj(c.media, melhor) : null
+                        const z = getZoneCmj(p)
+                        return (
+                          <tr key={c.id} className={i === 0 ? 'bg-amber-50' : 'hover:bg-slate-50'}>
+                            <td className="px-4 py-3 font-black text-sm text-black">
+                              {new Date(c.data_coleta).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                              {i === 0 && <span className="ml-2 text-[9px] bg-amber-500 text-black px-1.5 py-0.5 rounded font-black uppercase">Última</span>}
+                            </td>
+                            <td className="px-4 py-3 font-mono font-bold text-slate-600">{c.salto_1 ?? '—'}</td>
+                            <td className="px-4 py-3 font-mono font-bold text-slate-600">{c.salto_2 ?? '—'}</td>
+                            <td className="px-4 py-3 font-mono font-bold text-slate-600">{c.salto_3 ?? '—'}</td>
+                            <td className="px-4 py-3 font-black font-mono text-black">{c.media} cm</td>
+                            <td className="px-4 py-3 font-mono text-slate-500">{melhor ? `${melhor} cm` : '—'}</td>
+                            <td className="px-4 py-3">
+                              {p !== null
+                                ? <span className={`font-black text-sm ${z?.text}`}>{p > 0 ? '+' : ''}{p}%</span>
+                                : <span className="text-slate-300 text-xs">—</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              {z
+                                ? <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${z.badge}`}>{z.label}</span>
+                                : <span className="text-slate-300 text-xs">—</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )
+      })()}
+
+            {activeTab === 'lesoes' && (() => {
         const { events, byRegion } = injuryTimeline
         if (events.length === 0) return (
           <div className="flex flex-col items-center justify-center py-20 text-slate-300">
