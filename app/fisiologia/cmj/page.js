@@ -78,6 +78,7 @@ export default function CMJPage() {
   const [avalOk,      setAvalOk]      = useState(false)
 
   const [focused,    setFocused]    = useState(null)
+  const [filtroData, setFiltroData] = useState('')
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting,   setDeleting]   = useState(null)
 
@@ -267,6 +268,7 @@ export default function CMJPage() {
             { key: 'semaforo',  label: '🚦 Semáforo do Elenco' },
             { key: 'registrar', label: '📥 Registrar Coleta'    },
             { key: 'avaliacao', label: '📋 Avaliação Física'    },
+            { key: 'historico', label: '📅 Histórico por Dia'   },
           ].map(t => (
             <button
               key={t.key}
@@ -599,7 +601,7 @@ export default function CMJPage() {
                         <tr key={a} className="hover:bg-slate-50 transition-all">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <AthleteAvatar name={a} size="w-8 h-8" />
+                              <AthleteAvatar name={a} size="w-7 h-7" />
                               <span className="text-sm font-black text-black">{a}</span>
                             </div>
                           </td>
@@ -633,6 +635,147 @@ export default function CMJPage() {
             </div>
           </div>
         )}
+
+        {/* ── ABA HISTÓRICO POR DIA ── */}
+        {activeTab === 'historico' && (() => {
+          // datas únicas ordenadas desc
+          const datas = [...new Set(coletas.map(c => c.data_coleta?.split('T')[0] || c.data_coleta))].sort((a,b) => b.localeCompare(a))
+          const dataAtiva = filtroData || datas[0] || ''
+          const coletasDia = coletas.filter(c => {
+            const d = c.data_coleta?.split('T')[0] || c.data_coleta
+            return d === dataAtiva
+          })
+
+          const exportDiaCSV = () => {
+            const rows = [
+              ['Atleta','Data','Salto 1 (cm)','Salto 2 (cm)','Salto 3 (cm)','Média (cm)','Melhor Histórico (cm)','Fadiga (%)','Zona','Ação','HSR 2d (m)','Sprint 2d (m)'],
+              ...coletasDia.map(c => {
+                const norm = normalizeName(c.athlete_name)
+                const st   = athleteStatus.find(a => normalizeName(a.name) === norm)
+                const p    = st?.melhor ? calcFadiga(c.media, st.melhor) : null
+                const z    = getZone(p)
+                const g    = st?.gps2d
+                return [
+                  c.athlete_name,
+                  new Date(c.data_coleta).toLocaleDateString('pt-BR'),
+                  c.salto_1??'', c.salto_2??'', c.salto_3??'',
+                  c.media??'', st?.melhor??'', p??'',
+                  z?.label??'', z?.action??'',
+                  g?.hsr??'', g?.sprint??'',
+                ]
+              })
+            ]
+            const csv  = rows.map(r=>r.join(';')).join('\n')
+            const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'})
+            const url  = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = `cmj_${dataAtiva}.csv`
+            link.click(); URL.revokeObjectURL(url)
+          }
+
+          return (
+            <div className="space-y-4">
+              {/* Filtro de data + export */}
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Filtrar por data</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {datas.length === 0 ? (
+                      <p className="text-xs font-bold text-slate-400">Nenhuma coleta registrada ainda</p>
+                    ) : datas.map(d => (
+                      <button key={d} onClick={() => setFiltroData(d)}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${
+                          dataAtiva === d
+                            ? 'bg-amber-500 border-amber-500 text-black'
+                            : 'border-slate-200 text-slate-500 hover:border-amber-400 bg-white'
+                        }`}>
+                        {new Date(d+'T12:00:00').toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit'})}
+                        <span className="ml-1.5 bg-black/10 px-1 rounded text-[9px]">
+                          {coletas.filter(c => (c.data_coleta?.split('T')[0]||c.data_coleta) === d).length}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {coletasDia.length > 0 && (
+                  <button onClick={exportDiaCSV}
+                    className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Exportar CSV
+                  </button>
+                )}
+              </div>
+
+              {/* Tabela do dia */}
+              {coletasDia.length === 0 ? (
+                <div className="py-16 text-center border-2 border-slate-200 rounded-2xl">
+                  <p className="text-slate-400 text-sm font-black uppercase tracking-widest">Nenhuma coleta nessa data</p>
+                </div>
+              ) : (
+                <div className="border-2 border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-slate-50 border-b-2 border-slate-200">
+                        {['Atleta','S1','S2','S3','Média','Melhor','Fadiga','Zona','HSR 2d','Sprint 2d','Ação'].map(h => (
+                          <th key={h} className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {coletasDia
+                        .sort((a,b) => a.athlete_name.localeCompare(b.athlete_name,'pt-BR'))
+                        .map(c => {
+                          const norm = normalizeName(c.athlete_name)
+                          const st   = athleteStatus.find(a => normalizeName(a.name) === norm)
+                          const p    = st?.melhor ? calcFadiga(c.media, st.melhor) : null
+                          const z    = getZone(p)
+                          const g    = st?.gps2d
+                          return (
+                            <tr key={c.id} className={`hover:bg-slate-50 transition-all ${z ? z.bg : ''}`}>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <AthleteAvatar name={c.athlete_name} size="w-8 h-8" />
+                                  <span className="text-xs font-black text-black">{c.athlete_name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 font-mono text-xs font-bold text-slate-600">{c.salto_1 ?? '—'}</td>
+                              <td className="px-4 py-3 font-mono text-xs font-bold text-slate-600">{c.salto_2 ?? '—'}</td>
+                              <td className="px-4 py-3 font-mono text-xs font-bold text-slate-600">{c.salto_3 ?? '—'}</td>
+                              <td className="px-4 py-3 font-mono font-black text-black text-sm">{c.media} cm</td>
+                              <td className="px-4 py-3 font-mono text-xs font-bold text-slate-500">{st?.melhor ? `${st.melhor} cm` : '—'}</td>
+                              <td className="px-4 py-3">
+                                {p !== null
+                                  ? <span className={`text-base font-black ${z?.text}`}>{p > 0 ? '+' : ''}{p}%</span>
+                                  : <span className="text-slate-300 text-xs font-bold">—</span>}
+                              </td>
+                              <td className="px-4 py-3">
+                                {z ? <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${z.badge}`}>{z.label}</span>
+                                   : <span className="text-slate-300 text-xs font-bold">—</span>}
+                              </td>
+                              <td className="px-4 py-3">
+                                {g ? <span className={`text-xs font-black font-mono ${g.hsr > 1500 ? 'text-orange-600' : 'text-slate-700'}`}>{g.hsr.toLocaleString('pt-BR')} m</span>
+                                   : <span className="text-slate-300 text-xs font-bold">—</span>}
+                              </td>
+                              <td className="px-4 py-3">
+                                {g ? <span className={`text-xs font-black font-mono ${g.sprint > 300 ? 'text-orange-600' : 'text-slate-700'}`}>{g.sprint.toLocaleString('pt-BR')} m</span>
+                                   : <span className="text-slate-300 text-xs font-bold">—</span>}
+                              </td>
+                              <td className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                {z?.action || '—'}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* FOOTER */}
         <footer className="flex justify-between items-center border-t-2 border-slate-900 pt-3 mt-2">
