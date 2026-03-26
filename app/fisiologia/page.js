@@ -295,6 +295,17 @@ export default function Fisiologia() {
         </svg>
       )
     },
+    {
+      id: 'cmj',
+      titulo: 'Índice de Fadiga — CMJ',
+      descricao: 'Coleta diária do Counter Movement Jump. Semáforo de fadiga por atleta com integração GPS.',
+      rota: '/fisiologia/cmj',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      )
+    },
   ]
 
   const isUploading = uploadQueue.some(q => q.status === 'uploading')
