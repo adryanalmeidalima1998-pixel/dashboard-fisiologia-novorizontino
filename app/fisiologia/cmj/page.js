@@ -146,12 +146,43 @@ export default function CMJPage() {
 
   const sorted = useMemo(() => {
     const order = { 'Alto Risco': 0, 'Fadiga Moderada': 1, 'Atenção': 2, 'Normal': 3 }
-    return [...athleteStatus].sort((a, b) => {
-      const ao = a.zone ? order[a.zone.label] : (a.ultima ? 4 : 5)
-      const bo = b.zone ? order[b.zone.label] : (b.ultima ? 4 : 5)
-      return ao - bo
-    })
+    return [...athleteStatus]
+      .filter(a => a.ultima !== null) // só quem tem coleta registrada
+      .sort((a, b) => {
+        const ao = a.zone ? order[a.zone.label] : 4
+        const bo = b.zone ? order[b.zone.label] : 4
+        return ao - bo
+      })
   }, [athleteStatus])
+
+  // Export CSV
+  const exportCSV = () => {
+    const rows = [
+      ['Atleta', 'Data Coleta', 'Salto 1 (cm)', 'Salto 2 (cm)', 'Salto 3 (cm)', 'Média (cm)', 'Melhor Histórico (cm)', 'Fadiga (%)', 'Zona', 'Ação', 'HSR 2d (m)', 'Sprint 2d (m)'],
+      ...sorted.map(a => [
+        a.name,
+        a.ultima ? new Date(a.ultima.data_coleta).toLocaleDateString('pt-BR') : '—',
+        a.ultima?.salto_1 ?? '—',
+        a.ultima?.salto_2 ?? '—',
+        a.ultima?.salto_3 ?? '—',
+        a.ultima?.media ?? '—',
+        a.melhor ?? '—',
+        a.pct !== null ? a.pct : '—',
+        a.zone?.label ?? '—',
+        a.zone?.action ?? '—',
+        a.gpsLast2?.hsr ?? '—',
+        a.gpsLast2?.sprint ?? '—',
+      ])
+    ]
+    const csv = rows.map(r => r.join(';')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `cmj_${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   const zoneCounts = useMemo(() => {
     const c = { 'Normal': 0, 'Atenção': 0, 'Fadiga Moderada': 0, 'Alto Risco': 0 }
@@ -333,10 +364,23 @@ export default function CMJPage() {
               <div className="py-20 text-center text-red-500 text-sm font-bold">{fetchError}</div>
             ) : (
               <>
-                {/* Contador */}
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  {sorted.filter(a => a.ultima).length} / {sorted.length} atletas com coleta
-                </p>
+                {/* Contador + Export */}
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {sorted.length} atleta{sorted.length !== 1 ? 's' : ''} com coleta hoje
+                  </p>
+                  {sorted.length > 0 && (
+                    <button
+                      onClick={exportCSV}
+                      className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Exportar CSV
+                    </button>
+                  )}
+                </div>
 
                 {/* Grid de cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
