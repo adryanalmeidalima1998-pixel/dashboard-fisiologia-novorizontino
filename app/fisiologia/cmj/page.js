@@ -326,175 +326,137 @@ export default function CMJPage() {
 
         {/* ── ABA SEMÁFORO ── */}
         {activeTab === 'semaforo' && (
-          <div className="border-2 border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <>
             {isLoading ? (
               <div className="py-20 text-center text-slate-400 text-sm font-bold">Carregando...</div>
             ) : fetchError ? (
               <div className="py-20 text-center text-red-500 text-sm font-bold">{fetchError}</div>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b-2 border-slate-200 bg-slate-50">
-                        {['Atleta', 'Melhor Histórico', 'Coleta', 'Média CMJ', 'Fadiga', 'Zona', 'HSR 2d', 'Sprint 2d', 'Ação'].map(h => (
-                          <th key={h} className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {sorted.map(({ name, ultima, melhor, pct, zone, gpsLast2, highLoad }) => (
-                        <tr
-                          key={name}
-                          onClick={() => setFocused(focused === name ? null : name)}
-                          className={`cursor-pointer transition-all ${
-                            focused === name ? 'bg-amber-50 border-l-4 border-amber-500' :
-                            highLoad ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-slate-50'
-                          }`}
-                        >
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <AthleteAvatar name={name} size={32} />
-                              <div>
-                                <p className="text-xs font-black text-black">{name}</p>
-                                {highLoad && <p className="text-[10px] font-black text-red-600">⚠ carga alta + fadiga</p>}
-                              </div>
+                {/* Contador */}
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {sorted.filter(a => a.ultima).length} / {sorted.length} atletas com coleta
+                </p>
+
+                {/* Grid de cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {sorted.map(({ name, ultima, melhor, pct, zone, gpsLast2, highLoad }) => (
+                    <div
+                      key={name}
+                      onClick={() => setFocused(focused === name ? null : name)}
+                      className={`border-2 rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                        focused === name ? 'border-amber-500 bg-amber-50' :
+                        highLoad ? 'border-red-300 bg-red-50' :
+                        zone ? zone.border + ' ' + zone.bg :
+                        'border-slate-200 bg-white hover:border-amber-400'
+                      }`}
+                    >
+                      {/* Foto + nome */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <AthleteAvatar name={name} size="w-10 h-10" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black uppercase tracking-tighter text-black truncate">{name}</p>
+                          {zone
+                            ? <div className={`mt-0.5 inline-flex px-1.5 py-0.5 rounded text-[9px] font-black ${zone.badge}`}>{zone.label}</div>
+                            : <p className="text-[9px] text-slate-400 font-bold italic mt-0.5">Sem coleta</p>
+                          }
+                        </div>
+                      </div>
+
+                      {/* Fadiga % */}
+                      <div className="pb-3 mb-3 border-b border-slate-100">
+                        {pct !== null ? (
+                          <div className="flex items-end justify-between">
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Fadiga</p>
+                              <p className={`text-2xl font-black ${zone?.text}`}>{pct > 0 ? '+' : ''}{pct}%</p>
                             </div>
-                          </td>
-                          <td className="px-4 py-3 font-mono font-black text-slate-700 text-sm">
-                            {melhor ? `${melhor} cm` : <span className="text-slate-300 text-xs font-bold">sem histórico</span>}
-                          </td>
-                          <td className="px-4 py-3 text-xs font-bold text-slate-500">
-                            {ultima ? fmtDate(ultima.data_coleta) : <span className="text-slate-300">—</span>}
-                          </td>
-                          <td className="px-4 py-3 font-mono font-black text-black text-sm">
-                            {ultima ? `${ultima.media} cm` : <span className="text-slate-300 text-xs font-bold">—</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            {pct !== null
-                              ? <span className={`text-lg font-black ${zone?.text}`}>{pct > 0 ? '+' : ''}{pct}%</span>
-                              : <span className="text-slate-300 text-xs font-bold">—</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            {zone
-                              ? <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg ${zone.badge}`}>{zone.label}</span>
-                              : <span className="text-slate-300 text-xs font-bold">—</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            {gpsLast2
-                              ? <span className={`font-mono font-black text-xs ${gpsLast2.hsr > 1500 ? 'text-orange-600' : 'text-slate-600'}`}>{gpsLast2.hsr.toLocaleString('pt-BR')} m</span>
-                              : <span className="text-slate-300 text-xs font-bold">—</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            {gpsLast2
-                              ? <span className={`font-mono font-black text-xs ${gpsLast2.sprint > 300 ? 'text-orange-600' : 'text-slate-600'}`}>{gpsLast2.sprint.toLocaleString('pt-BR')} m</span>
-                              : <span className="text-slate-300 text-xs font-bold">—</span>}
-                          </td>
-                          <td className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                            {zone?.action || '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            <div className="text-right">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">CMJ hoje</p>
+                              <p className="text-sm font-black font-mono text-black">{ultima?.media} cm</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-400 italic font-medium">Sem registro de CMJ</p>
+                        )}
+                      </div>
+
+                      {/* GPS 2 dias */}
+                      <div className="grid grid-cols-2 gap-1">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">HSR 2D</span>
+                          <span className={`text-xs font-black ${gpsLast2?.hsr > 1500 ? 'text-orange-600' : 'text-black'}`}>
+                            {gpsLast2 ? `${gpsLast2.hsr.toLocaleString('pt-BR')} m` : '—'}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Sprint 2D</span>
+                          <span className={`text-xs font-black ${gpsLast2?.sprint > 300 ? 'text-orange-600' : 'text-black'}`}>
+                            {gpsLast2 ? `${gpsLast2.sprint.toLocaleString('pt-BR')} m` : '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {highLoad && (
+                        <div className="mt-2 bg-red-600 text-white rounded-lg px-2 py-1 text-center">
+                          <p className="text-[9px] font-black uppercase">⚠ Carga alta + fadiga</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
 
                 {/* Detalhe atleta */}
                 {focusedData && (
-                  <div className={`border-t-4 border-amber-500 bg-amber-50 p-6`}>
-                    <div className="flex items-center gap-4 mb-5">
-                      <AthleteAvatar name={focusedData.name} size={48} />
+                  <div className={`border-2 rounded-2xl p-5 ${focusedData.zone ? focusedData.zone.border + ' ' + focusedData.zone.bg : 'border-amber-400 bg-amber-50'}`}>
+                    <div className="flex items-center gap-4 mb-4">
+                      <AthleteAvatar name={focusedData.name} size="w-12 h-12" />
                       <div className="flex-1">
-                        <h3 className="text-xl font-black uppercase tracking-tighter text-black">{focusedData.name}</h3>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                          {focusedData.coletas.length} coleta{focusedData.coletas.length !== 1 ? 's' : ''} registrada{focusedData.coletas.length !== 1 ? 's' : ''} · Melhor histórico: <strong>{focusedData.melhor ?? '—'} cm</strong>
+                        <h3 className="text-base font-black uppercase tracking-tighter text-black">{focusedData.name}</h3>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                          {focusedData.coletas.length} coleta{focusedData.coletas.length !== 1 ? 's' : ''} · Melhor: <strong>{focusedData.melhor ?? '—'} cm</strong>
                         </p>
                       </div>
-
-                      {focusedData.gpsLast2 && (
-                        <div className={`border-2 rounded-xl px-5 py-3 text-center ${focusedData.highLoad ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'}`}>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">GPS Últimos 2 Dias</p>
-                          <div className="flex gap-5">
-                            <div>
-                              <p className={`text-sm font-black font-mono ${focusedData.gpsLast2.hsr > 1500 ? 'text-orange-600' : 'text-black'}`}>{focusedData.gpsLast2.hsr.toLocaleString('pt-BR')} m</p>
-                              <p className="text-[9px] font-black uppercase text-slate-400">HSR</p>
-                            </div>
-                            <div>
-                              <p className={`text-sm font-black font-mono ${focusedData.gpsLast2.sprint > 300 ? 'text-orange-600' : 'text-black'}`}>{focusedData.gpsLast2.sprint.toLocaleString('pt-BR')} m</p>
-                              <p className="text-[9px] font-black uppercase text-slate-400">Sprint</p>
-                            </div>
-                          </div>
-                          {focusedData.highLoad && <p className="text-[9px] font-black text-red-600 mt-1 uppercase">⚠ Carga alta + fadiga</p>}
-                        </div>
-                      )}
-
                       {focusedData.pct !== null && focusedData.zone && (
-                        <div className={`border-2 rounded-xl px-6 py-3 text-center ${focusedData.zone.border} ${focusedData.zone.bg}`}>
-                          <p className={`text-4xl font-black ${focusedData.zone.text}`}>
-                            {focusedData.pct > 0 ? '+' : ''}{focusedData.pct}%
-                          </p>
-                          <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${focusedData.zone.text}`}>
-                            {focusedData.zone.label}
-                          </p>
-                          <p className={`text-[9px] font-bold uppercase ${focusedData.zone.text} opacity-70`}>
-                            {focusedData.zone.action}
-                          </p>
+                        <div className={`text-right`}>
+                          <p className={`text-3xl font-black ${focusedData.zone.text}`}>{focusedData.pct > 0 ? '+' : ''}{focusedData.pct}%</p>
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${focusedData.zone.text}`}>{focusedData.zone.label} · {focusedData.zone.action}</p>
                         </div>
                       )}
-
-                      <button
-                        onClick={() => setFocused(null)}
-                        className="text-slate-400 hover:text-black font-black text-xl ml-2"
-                      >✕</button>
+                      <button onClick={() => setFocused(null)} className="text-slate-400 hover:text-black font-black text-xl ml-2">✕</button>
                     </div>
 
-                    {/* Histórico */}
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Histórico de Coletas</p>
-                    {focusedData.coletas.length === 0 ? (
-                      <p className="text-xs font-bold text-slate-400">Nenhuma coleta ainda.</p>
-                    ) : (
-                      <div className="space-y-1 max-h-48 overflow-y-auto">
-                        {focusedData.coletas.map(c => {
-                          const p = focusedData.melhor ? calcFadiga(c.media, focusedData.melhor) : null
-                          const z = getZone(p)
-                          const saltos = [c.salto_1, c.salto_2, c.salto_3].filter(v => v != null)
-                          return (
-                            <div key={c.id} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs group">
-                              <span className="font-black text-slate-500 w-14 shrink-0">{fmtDate(c.data_coleta)}</span>
-                              <span className="font-mono text-slate-400 flex-1">{saltos.length ? saltos.join(' / ') + ' cm' : '—'}</span>
-                              <span className="font-black font-mono text-black mr-4">Ø {c.media} cm</span>
-                              {p !== null && (
-                                <span className={`font-black w-14 text-right shrink-0 ${z?.text}`}>
-                                  {p > 0 ? '+' : ''}{p}%
-                                </span>
-                              )}
-                              {confirmDel === c.id ? (
-                                <div className="flex gap-2 ml-3">
-                                  <button onClick={handleDelete} disabled={deleting === c.id} className="text-red-600 font-black text-[10px] uppercase">Sim</button>
-                                  <button onClick={() => setConfirmDel(null)} className="text-slate-400 font-black text-[10px] uppercase">Não</button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={e => { e.stopPropagation(); setConfirmDel(c.id) }}
-                                  className="ml-3 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                                >
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Histórico</p>
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {focusedData.coletas.map(c => {
+                        const p = focusedData.melhor ? calcFadiga(c.media, focusedData.melhor) : null
+                        const z = getZone(p)
+                        const saltos = [c.salto_1, c.salto_2, c.salto_3].filter(v => v != null)
+                        return (
+                          <div key={c.id} className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs group">
+                            <span className="font-black text-slate-500 w-12 shrink-0">{fmtDate(c.data_coleta)}</span>
+                            <span className="font-mono text-slate-400 flex-1 text-[10px]">{saltos.length ? saltos.join(' / ') + ' cm' : '—'}</span>
+                            <span className="font-black font-mono text-black mr-3">Ø {c.media} cm</span>
+                            {p !== null && <span className={`font-black w-12 text-right shrink-0 ${z?.text}`}>{p > 0 ? '+' : ''}{p}%</span>}
+                            {confirmDel === c.id ? (
+                              <div className="flex gap-2 ml-2">
+                                <button onClick={handleDelete} disabled={deleting === c.id} className="text-red-600 font-black text-[9px] uppercase">Sim</button>
+                                <button onClick={() => setConfirmDel(null)} className="text-slate-400 font-black text-[9px] uppercase">Não</button>
+                              </div>
+                            ) : (
+                              <button onClick={e => { e.stopPropagation(); setConfirmDel(c.id) }} className="ml-2 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </>
             )}
-          </div>
+          </>
         )}
 
         {/* ── ABA REGISTRAR ── */}
