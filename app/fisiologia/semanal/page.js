@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useData } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
 
@@ -111,6 +111,7 @@ function getDefaultCycleStart() {
 
 export default function SemanalDashboard() {
   const router = useRouter()
+  const dateInputRef = useRef(null)
   const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions, isExcluded, normalizeName: normalizeN } = useData()
   const [cycleStartStr, setCycleStartStr] = useState(() => getDefaultCycleStart())
   const [activeTab, setActiveTab] = useState('carga')
@@ -823,20 +824,27 @@ export default function SemanalDashboard() {
                   setExcludedAthletes(loadExclusionsForWeek(next))
                 }}
                 className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">‹</button>
-              <div className="relative group">
-                <div className="bg-amber-500 text-black px-3 py-1 font-black text-xs uppercase italic shadow-md min-w-[160px] text-center cursor-pointer">{weekLabel}</div>
-                <input
-                  type="date"
-                  value={cycleStartStr}
-                  onChange={e => {
-                    if (!e.target.value) return
-                    setCycleStartStr(e.target.value)
-                    setExcludedAthletes(loadExclusionsForWeek(e.target.value))
-                  }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                  title="Escolha o início do microciclo"
-                />
-              </div>
+              <button
+                onClick={() => {
+                  try { dateInputRef.current?.showPicker() } catch { dateInputRef.current?.click() }
+                }}
+                className="bg-amber-500 text-black px-3 py-1 font-black text-xs uppercase italic shadow-md min-w-[160px] text-center hover:bg-amber-400 transition-colors cursor-pointer"
+                title="Clique para escolher o início do microciclo"
+              >
+                {weekLabel} 📅
+              </button>
+              <input
+                ref={dateInputRef}
+                type="date"
+                value={cycleStartStr}
+                onChange={e => {
+                  if (!e.target.value) return
+                  setCycleStartStr(e.target.value)
+                  setExcludedAthletes(loadExclusionsForWeek(e.target.value))
+                }}
+                className="w-0 h-0 opacity-0 absolute"
+                tabIndex={-1}
+              />
               <button
                 onClick={() => {
                   const d = new Date(cycleStartStr + 'T12:00:00')
