@@ -111,9 +111,15 @@ function getDefaultCycleStart() {
 
 export default function SemanalDashboard() {
   const router = useRouter()
-  const dateInputRef = useRef(null)
+  const dateStartRef = useRef(null)
+  const dateEndRef = useRef(null)
   const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions, isExcluded, normalizeName: normalizeN } = useData()
   const [cycleStartStr, setCycleStartStr] = useState(() => getDefaultCycleStart())
+  const [cycleEndStr, setCycleEndStr] = useState(() => {
+    const d = new Date(getDefaultCycleStart() + 'T12:00:00')
+    d.setDate(d.getDate() + 6)
+    return d.toISOString().split('T')[0]
+  })
   const [activeTab, setActiveTab] = useState('carga')
   const [evolucaoWeeks, setEvolucaoWeeks] = useState(12)
   const [evolucaoAtleta, setEvolucaoAtleta] = useState('')
@@ -142,7 +148,7 @@ export default function SemanalDashboard() {
 
   // ── MINUTAGEM ────────────────────────────────────────────────────────────────
   // Estrutura: { jogos: [{id, date, label}], minutes: { "Atleta": { sessionId: min } } }
-  const minutagemKey = `minutagem_${cycleStartStr}`
+  const minutagemKey = `minutagem_${cycleStartStr}_${cycleEndStr}`
   const [minutagemData, setMinutagemData] = useState(() => {
     try { const s = localStorage.getItem(`minutagem_${getDefaultCycleStart()}`); return s ? JSON.parse(s) : { jogos: [], minutes: {} } }
     catch { return { jogos: [], minutes: {} } }
@@ -185,7 +191,7 @@ export default function SemanalDashboard() {
   // Recarrega minutagem ao trocar de ciclo
   useEffect(() => {
     setMinutagemData(loadMinutagem(minutagemKey))
-  }, [cycleStartStr])
+  }, [cycleStartStr, cycleEndStr])
 
   // Sincroniza exclusões com localStorage sempre que cycleStartStr ou excludedAthletes mudam
   function saveExclusions(next, startStr) {
@@ -227,20 +233,25 @@ export default function SemanalDashboard() {
   const { monday, sunday } = useMemo(() => {
     const monday = new Date(cycleStartStr + 'T12:00:00')
     monday.setHours(0, 0, 0, 0)
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
+    const sunday = new Date(cycleEndStr + 'T12:00:00')
     sunday.setHours(23, 59, 59, 999)
     return { monday, sunday }
-  }, [cycleStartStr])
-  const weekLabel = `${monday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${sunday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
+  }, [cycleStartStr, cycleEndStr])
+  const cycleDays = useMemo(() => {
+    const start = new Date(cycleStartStr + 'T12:00:00')
+    const end = new Date(cycleEndStr + 'T12:00:00')
+    const diff = Math.max(1, Math.round((end - start) / 86400000) + 1)
+    return diff
+  }, [cycleStartStr, cycleEndStr])
+  const weekLabel = `${monday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${sunday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })} (${cycleDays}d)`
 
-  // Dias da semana como string YYYY-MM-DD
+  // Dias do microciclo como string YYYY-MM-DD (agora variável)
   const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
+    return Array.from({ length: cycleDays }, (_, i) => {
       const d = new Date(monday); d.setDate(monday.getDate() + i)
       return isoDate(d)
     })
-  }, [monday])
+  }, [monday, cycleDays])
 
   // Dados de bem-estar da semana
   const weekBemEstar = useMemo(() => {
@@ -399,18 +410,19 @@ export default function SemanalDashboard() {
   // Cálculo de monotonia e strain por atleta
   const weekStats = useMemo(() => {
     const stats = {}
+    const n = weekDays.length || 1
     for (const athlete of weekAthletes) {
       const dailyLoads = weekDays.map(d => srpeMatrix[athlete][d] || 0)
       const weeklySum = dailyLoads.reduce((a, b) => a + b, 0)
-      const mean = weeklySum / 7
-      const sd = Math.sqrt(dailyLoads.map(v => Math.pow(v - mean, 2)).reduce((a, b) => a + b, 0) / 7)
+      const mean = weeklySum / n
+      const sd = Math.sqrt(dailyLoads.map(v => Math.pow(v - mean, 2)).reduce((a, b) => a + b, 0) / n)
       const monotony = sd > 0 ? mean / sd : 0
       const strain = weeklySum * monotony
 
-      // ACWR: semana atual / média das 3 semanas anteriores
+      // ACWR: ciclo atual / média dos 3 ciclos anteriores (mesma duração)
       const prevLoads = [1, 2, 3].map(w => {
-        const pm = new Date(monday); pm.setDate(monday.getDate() - w * 7); pm.setHours(0, 0, 0, 0)
-        const ps = new Date(pm); ps.setDate(pm.getDate() + 6); ps.setHours(23, 59, 59, 999)
+        const pm = new Date(monday); pm.setDate(monday.getDate() - w * cycleDays); pm.setHours(0, 0, 0, 0)
+        const ps = new Date(pm); ps.setDate(pm.getDate() + cycleDays - 1); ps.setHours(23, 59, 59, 999)
         const posts = bemEstarData.filter(r => {
           if (normName(r.playerName) !== normName(athlete) || r.type !== 'post' || !r.srpeLoad) return false
           const d = new Date(r.date + 'T12:00:00')
@@ -424,7 +436,7 @@ export default function SemanalDashboard() {
       stats[athlete] = { weeklySum, monotony, strain, acwr }
     }
     return stats
-  }, [weekAthletes, srpeMatrix, weekDays, bemEstarData, monday])
+  }, [weekAthletes, srpeMatrix, weekDays, bemEstarData, monday, cycleDays])
 
   // ── Listas ordenadas por aba ─────────────────────────────────────────────────
   const sortedCargaAthletes = useMemo(() => {
@@ -814,46 +826,79 @@ export default function SemanalDashboard() {
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  const d = new Date(cycleStartStr + 'T12:00:00')
-                  d.setDate(d.getDate() - 7)
-                  const next = d.toISOString().split('T')[0]
-                  setCycleStartStr(next)
-                  setExcludedAthletes(loadExclusionsForWeek(next))
-                }}
-                className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">‹</button>
-              <button
-                onClick={() => {
-                  try { dateInputRef.current?.showPicker() } catch { dateInputRef.current?.click() }
-                }}
-                className="bg-amber-500 text-black px-3 py-1 font-black text-xs uppercase italic shadow-md min-w-[160px] text-center hover:bg-amber-400 transition-colors cursor-pointer"
-                title="Clique para escolher o início do microciclo"
-              >
-                {weekLabel} 📅
-              </button>
-              <input
-                ref={dateInputRef}
-                type="date"
-                value={cycleStartStr}
-                onChange={e => {
-                  if (!e.target.value) return
-                  setCycleStartStr(e.target.value)
-                  setExcludedAthletes(loadExclusionsForWeek(e.target.value))
-                }}
-                className="w-0 h-0 opacity-0 absolute"
-                tabIndex={-1}
-              />
-              <button
-                onClick={() => {
-                  const d = new Date(cycleStartStr + 'T12:00:00')
-                  d.setDate(d.getDate() + 7)
-                  const next = d.toISOString().split('T')[0]
-                  setCycleStartStr(next)
-                  setExcludedAthletes(loadExclusionsForWeek(next))
-                }}
-                className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">›</button>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {/* Seletor de início */}
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Início</span>
+                <button
+                  onClick={() => { try { dateStartRef.current?.showPicker() } catch { dateStartRef.current?.click() } }}
+                  className="bg-amber-500 text-black px-3 py-1.5 font-black text-xs rounded-lg hover:bg-amber-400 transition-colors cursor-pointer shadow-sm"
+                >
+                  {monday.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })} 📅
+                </button>
+                <input
+                  ref={dateStartRef}
+                  type="date"
+                  value={cycleStartStr}
+                  onChange={e => {
+                    if (!e.target.value) return
+                    setCycleStartStr(e.target.value)
+                    setExcludedAthletes(loadExclusionsForWeek(e.target.value))
+                  }}
+                  className="w-0 h-0 opacity-0 absolute"
+                  tabIndex={-1}
+                />
+              </div>
+              <span className="text-slate-400 font-black text-sm mt-3">→</span>
+              {/* Seletor de fim */}
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Fim</span>
+                <button
+                  onClick={() => { try { dateEndRef.current?.showPicker() } catch { dateEndRef.current?.click() } }}
+                  className="bg-slate-700 text-white px-3 py-1.5 font-black text-xs rounded-lg hover:bg-slate-600 transition-colors cursor-pointer shadow-sm"
+                >
+                  {sunday.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })} 📅
+                </button>
+                <input
+                  ref={dateEndRef}
+                  type="date"
+                  value={cycleEndStr}
+                  min={cycleStartStr}
+                  onChange={e => {
+                    if (!e.target.value) return
+                    setCycleEndStr(e.target.value)
+                  }}
+                  className="w-0 h-0 opacity-0 absolute"
+                  tabIndex={-1}
+                />
+              </div>
+              {/* Badge com total de dias */}
+              <div className="bg-slate-100 text-slate-600 px-2 py-1 rounded-lg text-[10px] font-black mt-3">
+                {cycleDays}d
+              </div>
+              {/* Nav ±1 ciclo */}
+              <div className="flex items-center gap-1 mt-3">
+                <button
+                  onClick={() => {
+                    const s = new Date(cycleStartStr + 'T12:00:00'); s.setDate(s.getDate() - cycleDays)
+                    const e = new Date(cycleEndStr + 'T12:00:00'); e.setDate(e.getDate() - cycleDays)
+                    const ns = s.toISOString().split('T')[0]; const ne = e.toISOString().split('T')[0]
+                    setCycleStartStr(ns); setCycleEndStr(ne); setExcludedAthletes(loadExclusionsForWeek(ns))
+                  }}
+                  className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all"
+                  title="Ciclo anterior"
+                >‹</button>
+                <button
+                  onClick={() => {
+                    const s = new Date(cycleStartStr + 'T12:00:00'); s.setDate(s.getDate() + cycleDays)
+                    const e = new Date(cycleEndStr + 'T12:00:00'); e.setDate(e.getDate() + cycleDays)
+                    const ns = s.toISOString().split('T')[0]; const ne = e.toISOString().split('T')[0]
+                    setCycleStartStr(ns); setCycleEndStr(ne); setExcludedAthletes(loadExclusionsForWeek(ns))
+                  }}
+                  className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all"
+                  title="Próximo ciclo"
+                >›</button>
+              </div>
             </div>
           </div>
         </header>
@@ -1324,7 +1369,7 @@ export default function SemanalDashboard() {
               <div className="overflow-x-auto">
                 <div className="inline-block min-w-full">
                   {/* Header dos dias */}
-                  <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: '200px repeat(7, 1fr) 80px 60px' }}>
+                  <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: `200px repeat(${weekDays.length}, 1fr) 80px 60px` }}>
                     <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-2">Atleta</div>
                     {weekDays.map((d, i) => (
                       <div key={d} className="text-center text-[9px] font-black uppercase tracking-widest text-slate-500">
@@ -1347,7 +1392,7 @@ export default function SemanalDashboard() {
                       <div
                         key={athlete}
                         className="grid gap-1 mb-0.5 items-center cursor-pointer group"
-                        style={{ gridTemplateColumns: '200px repeat(7, 1fr) 80px 60px' }}
+                        style={{ gridTemplateColumns: `200px repeat(${weekDays.length}, 1fr) 80px 60px` }}
                         onClick={() => router.push(`/fisiologia/individual?atleta=${encodeURIComponent(athlete)}`)}
                       >
                         {/* Nome */}
@@ -1414,7 +1459,7 @@ export default function SemanalDashboard() {
 
                   {/* Linha de média do grupo */}
                   {groupCargaAvg && (
-                    <div className="grid gap-1 mt-1 border-t-2 border-slate-900 pt-1 items-center" style={{ gridTemplateColumns: '200px repeat(7, 1fr) 80px 60px' }}>
+                    <div className="grid gap-1 mt-1 border-t-2 border-slate-900 pt-1 items-center" style={{ gridTemplateColumns: `200px repeat(${weekDays.length}, 1fr) 80px 60px` }}>
                       <div className="px-2 py-1.5">
                         <span className="text-[9px] font-black uppercase tracking-widest text-amber-700">Média Grupo</span>
                       </div>
