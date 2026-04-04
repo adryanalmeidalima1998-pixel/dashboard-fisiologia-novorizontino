@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useData } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
 
@@ -98,11 +98,21 @@ function SortTh({ label, col, sort, onSort, className = "" }) {
 
 // Dias da semana para tabela
 const WEEK_DAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+const PT_DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+function getDayShort(dateStr) { return PT_DAYS_SHORT[new Date(dateStr + 'T12:00:00').getDay()] }
+function getDefaultCycleStart() {
+  const today = new Date()
+  const dow = today.getDay() === 0 ? 6 : today.getDay() - 1
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - dow)
+  monday.setHours(0, 0, 0, 0)
+  return monday.toISOString().split('T')[0]
+}
 
 export default function SemanalDashboard() {
   const router = useRouter()
   const { gpsData, bemEstarData, isLoadingBemEstar, fetchBemEstar, playerPositions, isExcluded, normalizeName: normalizeN } = useData()
-  const [weekOffset, setWeekOffset] = useState(0)
+  const [cycleStartStr, setCycleStartStr] = useState(() => getDefaultCycleStart())
   const [activeTab, setActiveTab] = useState('carga')
   const [evolucaoWeeks, setEvolucaoWeeks] = useState(12)
   const [evolucaoAtleta, setEvolucaoAtleta] = useState('')
@@ -117,31 +127,74 @@ export default function SemanalDashboard() {
   const [hoveredPainRegion, setHoveredPainRegion] = useState(null)
   // Atletas excluídos da média do grupo (DM, goleiro no profissional, erro GPS, etc.)
   // Persiste no localStorage por semana: chave "excluded_YYYY-WW"
-  function getWeekKey(offset) {
-    const { monday } = getWeekBounds(offset)
-    const year = monday.getFullYear()
-    const startOfYear = new Date(year, 0, 1)
-    const week = Math.ceil(((monday - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
-    return `excluded_${year}-W${String(week).padStart(2, '0')}`
+  function getWeekKey(startStr) {
+    return `excluded_cycle_${startStr}`
   }
 
   const [excludedAthletes, setExcludedAthletes] = useState(() => {
     try {
-      const saved = localStorage.getItem(getWeekKey(0))
+      const saved = localStorage.getItem(getWeekKey(getDefaultCycleStart()))
       return saved ? new Set(JSON.parse(saved)) : new Set()
     } catch { return new Set() }
   })
   const [showExcludePanel, setShowExcludePanel] = useState(false)
 
-  // Sincroniza exclusões com localStorage sempre que weekOffset ou excludedAthletes mudam
-  function saveExclusions(next, offset) {
-    try { localStorage.setItem(getWeekKey(offset), JSON.stringify(Array.from(next))) } catch {}
+  // ── MINUTAGEM ────────────────────────────────────────────────────────────────
+  // Estrutura: { jogos: [{id, date, label}], minutes: { "Atleta": { sessionId: min } } }
+  const minutagemKey = `minutagem_${cycleStartStr}`
+  const [minutagemData, setMinutagemData] = useState(() => {
+    try { const s = localStorage.getItem(`minutagem_${getDefaultCycleStart()}`); return s ? JSON.parse(s) : { jogos: [], minutes: {} } }
+    catch { return { jogos: [], minutes: {} } }
+  })
+  const [newJogoLabel, setNewJogoLabel] = useState('')
+  const [newJogoDate, setNewJogoDate] = useState('')
+
+  // Carrega minutagem quando o ciclo muda
+  const loadMinutagem = (key) => {
+    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : { jogos: [], minutes: {} } }
+    catch { return { jogos: [], minutes: {} } }
+  }
+  const saveMinutagem = (data, key) => {
+    try { localStorage.setItem(key, JSON.stringify(data)) } catch {}
+  }
+  const updateMinute = (athlete, sessionId, value) => {
+    setMinutagemData(prev => {
+      const next = { ...prev, minutes: { ...prev.minutes, [athlete]: { ...(prev.minutes[athlete] || {}), [sessionId]: value === '' ? null : Number(value) } } }
+      saveMinutagem(next, minutagemKey)
+      return next
+    })
+  }
+  const addJogo = () => {
+    if (!newJogoLabel.trim() || !newJogoDate) return
+    setMinutagemData(prev => {
+      const next = { ...prev, jogos: [...prev.jogos, { id: `jogo_${Date.now()}`, date: newJogoDate, label: newJogoLabel.trim() }] }
+      saveMinutagem(next, minutagemKey)
+      return next
+    })
+    setNewJogoLabel(''); setNewJogoDate('')
+  }
+  const removeJogo = (id) => {
+    setMinutagemData(prev => {
+      const next = { ...prev, jogos: prev.jogos.filter(j => j.id !== id) }
+      saveMinutagem(next, minutagemKey)
+      return next
+    })
+  }
+
+  // Recarrega minutagem ao trocar de ciclo
+  useEffect(() => {
+    setMinutagemData(loadMinutagem(minutagemKey))
+  }, [cycleStartStr])
+
+  // Sincroniza exclusões com localStorage sempre que cycleStartStr ou excludedAthletes mudam
+  function saveExclusions(next, startStr) {
+    try { localStorage.setItem(getWeekKey(startStr), JSON.stringify(Array.from(next))) } catch {}
   }
 
   // Carrega exclusões do localStorage quando troca de semana
-  const loadExclusionsForWeek = (offset) => {
+  const loadExclusionsForWeek = (startStr) => {
     try {
-      const saved = localStorage.getItem(getWeekKey(offset))
+      const saved = localStorage.getItem(getWeekKey(startStr))
       return saved ? new Set(JSON.parse(saved)) : new Set()
     } catch { return new Set() }
   }
@@ -150,7 +203,7 @@ export default function SemanalDashboard() {
     setExcludedAthletes(prev => {
       const next = new Set(prev)
       next.has(athlete) ? next.delete(athlete) : next.add(athlete)
-      saveExclusions(next, weekOffset)
+      saveExclusions(next, cycleStartStr)
       return next
     })
   }
@@ -170,7 +223,14 @@ export default function SemanalDashboard() {
     }
   }
 
-  const { monday, sunday } = useMemo(() => getWeekBounds(weekOffset), [weekOffset])
+  const { monday, sunday } = useMemo(() => {
+    const monday = new Date(cycleStartStr + 'T12:00:00')
+    monday.setHours(0, 0, 0, 0)
+    const sunday = new Date(monday)
+    sunday.setDate(monday.getDate() + 6)
+    sunday.setHours(23, 59, 59, 999)
+    return { monday, sunday }
+  }, [cycleStartStr])
   const weekLabel = `${monday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${sunday.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
 
   // Dias da semana como string YYYY-MM-DD
@@ -348,7 +408,8 @@ export default function SemanalDashboard() {
 
       // ACWR: semana atual / média das 3 semanas anteriores
       const prevLoads = [1, 2, 3].map(w => {
-        const { monday: pm, sunday: ps } = getWeekBounds(weekOffset - w)
+        const pm = new Date(monday); pm.setDate(monday.getDate() - w * 7); pm.setHours(0, 0, 0, 0)
+        const ps = new Date(pm); ps.setDate(pm.getDate() + 6); ps.setHours(23, 59, 59, 999)
         const posts = bemEstarData.filter(r => {
           if (normName(r.playerName) !== normName(athlete) || r.type !== 'post' || !r.srpeLoad) return false
           const d = new Date(r.date + 'T12:00:00')
@@ -362,7 +423,7 @@ export default function SemanalDashboard() {
       stats[athlete] = { weeklySum, monotony, strain, acwr }
     }
     return stats
-  }, [weekAthletes, srpeMatrix, weekDays, bemEstarData, weekOffset])
+  }, [weekAthletes, srpeMatrix, weekDays, bemEstarData, monday])
 
   // ── Listas ordenadas por aba ─────────────────────────────────────────────────
   const sortedCargaAthletes = useMemo(() => {
@@ -613,7 +674,7 @@ export default function SemanalDashboard() {
                   // ── Heatmap de carga (tabela) ──
                   doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(0,0,0)
                   doc.text('HEATMAP DE CARGA sRPE × min', 14, 32)
-                  const heatHead = [['Atleta', ...WEEK_DAYS, 'Total UA', 'ACWR', 'Monotonia']]
+                  const heatHead = [['Atleta', ...weekDays.map(d => getDayShort(d) + ' ' + new Date(d+'T12:00:00').getDate()), 'Total UA', 'ACWR', 'Monotonia']]
                   const heatBody = sortedCargaAthletes.slice(0, 25).map(a => {
                     const st = weekStats[a]
                     return [
@@ -753,9 +814,38 @@ export default function SemanalDashboard() {
               ))}
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => { const next = weekOffset - 1; setWeekOffset(next); setExcludedAthletes(loadExclusionsForWeek(next)) }} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">‹</button>
-              <div className="bg-amber-500 text-black px-3 py-1 font-black text-xs uppercase italic shadow-md min-w-[160px] text-center">{weekLabel}</div>
-              <button onClick={() => { const next = Math.min(0, weekOffset + 1); setWeekOffset(next); setExcludedAthletes(loadExclusionsForWeek(next)) }} className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">›</button>
+              <button
+                onClick={() => {
+                  const d = new Date(cycleStartStr + 'T12:00:00')
+                  d.setDate(d.getDate() - 7)
+                  const next = d.toISOString().split('T')[0]
+                  setCycleStartStr(next)
+                  setExcludedAthletes(loadExclusionsForWeek(next))
+                }}
+                className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">‹</button>
+              <div className="relative group">
+                <div className="bg-amber-500 text-black px-3 py-1 font-black text-xs uppercase italic shadow-md min-w-[160px] text-center cursor-pointer">{weekLabel}</div>
+                <input
+                  type="date"
+                  value={cycleStartStr}
+                  onChange={e => {
+                    if (!e.target.value) return
+                    setCycleStartStr(e.target.value)
+                    setExcludedAthletes(loadExclusionsForWeek(e.target.value))
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                  title="Escolha o início do microciclo"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  const d = new Date(cycleStartStr + 'T12:00:00')
+                  d.setDate(d.getDate() + 7)
+                  const next = d.toISOString().split('T')[0]
+                  setCycleStartStr(next)
+                  setExcludedAthletes(loadExclusionsForWeek(next))
+                }}
+                className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 font-black text-sm transition-all">›</button>
             </div>
           </div>
         </header>
@@ -801,6 +891,7 @@ export default function SemanalDashboard() {
             { id: 'mediaGps', label: '📊 Médias GPS' },
             { id: 'evolucao', label: '📈 Evolução Semanal' },
             { id: 'dor', label: '🩺 Dor da Equipe' },
+            { id: 'minutagem', label: '⏱ Minutagem' },
           ].map(t => (
             <button
               key={t.id}
@@ -822,7 +913,7 @@ export default function SemanalDashboard() {
                     <SortTh label="Atleta" col="name" sort={sortCarga} onSort={c => toggleSort(sortCarga, c, setSortCarga)} className="text-left pr-4" />
                     {weekDays.map((d, i) => (
                       <th key={d} className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500 min-w-[60px]">
-                        {WEEK_DAYS[i]}<br />
+                        {getDayShort(d)}<br />
                         <span className="font-medium normal-case text-[9px]">{new Date(d + 'T12:00:00').getDate()}</span>
                       </th>
                     ))}
@@ -947,13 +1038,13 @@ export default function SemanalDashboard() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => { setExcludedAthletes(new Set()); saveExclusions(new Set(), weekOffset) }}
+                        onClick={() => { setExcludedAthletes(new Set()); saveExclusions(new Set(), cycleStartStr) }}
                         className="text-[10px] font-black uppercase tracking-widest text-amber-700 hover:text-amber-900 px-2 py-1 rounded-lg border border-amber-300 hover:bg-amber-100 transition-all"
                       >
                         Incluir todos
                       </button>
                       <button
-                        onClick={() => { const all = new Set(athletesWithGps); setExcludedAthletes(all); saveExclusions(all, weekOffset) }}
+                        onClick={() => { const all = new Set(athletesWithGps); setExcludedAthletes(all); saveExclusions(all, cycleStartStr) }}
                         className="text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-slate-800 px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 transition-all"
                       >
                         Desmarcar todos
@@ -1111,7 +1202,7 @@ export default function SemanalDashboard() {
                       <SortTh label="Atleta" col="name" sort={sortBem} onSort={c => toggleSort(sortBem, c, setSortBem)} className="text-left pr-4" />
                       {weekDays.map((d, i) => (
                         <th key={d} className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-500 min-w-[60px]">
-                          {WEEK_DAYS[i]}<br />
+                          {getDayShort(d)}<br />
                           <span className="font-medium normal-case text-[9px]">{new Date(d + 'T12:00:00').getDate()}</span>
                         </th>
                       ))}
@@ -1227,11 +1318,11 @@ export default function SemanalDashboard() {
                   {/* Header dos dias */}
                   <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: '200px repeat(7, 1fr) 80px 60px' }}>
                     <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-2">Atleta</div>
-                    {WEEK_DAYS.map((d, i) => (
+                    {weekDays.map((d, i) => (
                       <div key={d} className="text-center text-[9px] font-black uppercase tracking-widest text-slate-500">
-                        {d}<br />
+                        {getDayShort(d)}<br />
                         <span className="font-medium normal-case text-[8px]">
-                          {new Date(weekDays[i] + 'T12:00:00').getDate()}
+                          {new Date(d + 'T12:00:00').getDate()}
                         </span>
                       </div>
                     ))}
@@ -1962,6 +2053,242 @@ export default function SemanalDashboard() {
                 <span>Passe o mouse sobre o mapa ou a lista para destacar a região</span>
                 <span className="text-amber-600">Âmbar = 1 relato · Laranja = frequente · Vermelho = recorrente</span>
                 <span>Clique em um atleta para ver o perfil individual</span>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* TAB: MINUTAGEM */}
+        {activeTab === 'minutagem' && (() => {
+          // Sessões GPS da semana (treino) — puxamos durationMin do period 0 por atleta
+          const gpsSessionsWeek = weekGps.map(s => {
+            // pega duração média dos atletas nessa sessão (period 0)
+            const rows0 = s.rows.filter(r => r.periodNumber === 0 && !r.isOutlier)
+            const avgDur = rows0.length ? rows0.reduce((acc, r) => acc + (r.durationMin || 0), 0) / rows0.length : null
+            return {
+              id: s.id || s.sessionDate + '_' + (s.sessionName || ''),
+              date: s.date || s.sessionDate,
+              label: s.sessionName || s.sessionDate,
+              type: s.metadata?.type || s.metadata?.sessionType || 'treino',
+              durationMin: avgDur,
+              rows0,
+            }
+          }).sort((a, b) => (a.date > b.date ? 1 : -1))
+
+          // Jogos manuais dentro do ciclo
+          const jogosWeek = (minutagemData.jogos || []).filter(j => j.date >= cycleStartStr && j.date <= isoDate(sunday))
+
+          // Todos os atletas com dados
+          const allAthletes = weekAthletes.length > 0 ? weekAthletes : []
+
+          // Totais por atleta
+          function getAthleteTotal(athlete) {
+            const m = minutagemData.minutes?.[athlete] || {}
+            let total = 0
+            gpsSessionsWeek.forEach(s => { total += m[s.id] ?? 0 })
+            jogosWeek.forEach(j => { total += m[j.id] ?? 0 })
+            return total
+          }
+
+          // Totais por sessão
+          function getSessionTotal(sessionId) {
+            return allAthletes.reduce((acc, a) => acc + (minutagemData.minutes?.[a]?.[sessionId] ?? 0), 0)
+          }
+
+          return (
+            <div className="flex flex-col gap-5">
+              {/* KPIs rápidos */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Sessões GPS</p>
+                  <p className="text-2xl font-black text-black">{gpsSessionsWeek.length}</p>
+                  <p className="text-[10px] text-slate-500">no microciclo</p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Jogos</p>
+                  <p className="text-2xl font-black text-green-700">{jogosWeek.length}</p>
+                  <p className="text-[10px] text-slate-500">entrada manual</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Atletas</p>
+                  <p className="text-2xl font-black text-black">{allAthletes.length}</p>
+                  <p className="text-[10px] text-slate-500">no ciclo</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Minutos preenchidos</p>
+                  <p className="text-2xl font-black text-amber-700">
+                    {Object.values(minutagemData.minutes || {}).reduce((acc, m) => acc + Object.values(m).filter(v => v > 0).length, 0)}
+                  </p>
+                  <p className="text-[10px] text-slate-500">campos com valor</p>
+                </div>
+              </div>
+
+              {/* Adicionar jogo manual */}
+              <div className="border-2 border-green-200 bg-green-50 rounded-xl p-4">
+                <p className="text-xs font-black uppercase tracking-widest text-green-800 mb-3">➕ Adicionar Jogo Manual</p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-green-700">Data do jogo</label>
+                    <input
+                      type="date"
+                      value={newJogoDate}
+                      onChange={e => setNewJogoDate(e.target.value)}
+                      className="border border-green-300 rounded-lg px-3 py-1.5 text-xs font-bold bg-white focus:border-green-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1 min-w-[180px]">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-green-700">Adversário / descrição</label>
+                    <input
+                      type="text"
+                      value={newJogoLabel}
+                      onChange={e => setNewJogoLabel(e.target.value)}
+                      placeholder="ex: vs Ponte Preta"
+                      className="border border-green-300 rounded-lg px-3 py-1.5 text-xs font-bold bg-white focus:border-green-500 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={addJogo}
+                    disabled={!newJogoLabel.trim() || !newJogoDate}
+                    className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-green-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+                <p className="text-[10px] text-green-600 font-bold mt-2">
+                  💡 Minutagem de jogo digitada manualmente (fonte: Bits Code ou súmula). GPS Catapult preenche treinos automaticamente.
+                </p>
+              </div>
+
+              {/* Tabela de minutagem */}
+              {allAthletes.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-sm">Sem atletas no microciclo. Carregue GPS ou registre bem-estar.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b-2 border-slate-900">
+                        <th className="text-left py-2 pr-4 font-black uppercase tracking-widest text-[10px] text-slate-500 min-w-[150px]">Atleta</th>
+                        {gpsSessionsWeek.map(s => (
+                          <th key={s.id} className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-blue-600 min-w-[80px]">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[8px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-black">🏃 TREINO</span>
+                              <span className="text-[9px] normal-case font-bold text-slate-500">{getDayShort(s.date)} {new Date(s.date+'T12:00:00').getDate()}</span>
+                              <span className="text-[8px] normal-case font-medium text-slate-400 truncate max-w-[70px]">{s.label}</span>
+                              {s.durationMin && (
+                                <span className="text-[8px] bg-slate-100 text-slate-500 px-1 rounded font-bold">{s.durationMin.toFixed(0)}min GPS</span>
+                              )}
+                            </div>
+                          </th>
+                        ))}
+                        {jogosWeek.map(j => (
+                          <th key={j.id} className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-green-700 min-w-[80px]">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[8px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-black">⚽ JOGO</span>
+                              <span className="text-[9px] normal-case font-bold text-slate-500">{getDayShort(j.date)} {new Date(j.date+'T12:00:00').getDate()}</span>
+                              <span className="text-[8px] normal-case font-medium text-slate-400 truncate max-w-[70px]">{j.label}</span>
+                              <button onClick={() => removeJogo(j.id)} className="text-[8px] text-red-400 hover:text-red-600 font-black mt-0.5">✕ remover</button>
+                            </div>
+                          </th>
+                        ))}
+                        <th className="text-center py-2 px-2 font-black uppercase tracking-widest text-[10px] text-slate-900 min-w-[70px]">Total min</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allAthletes.map((athlete, idx) => {
+                        const total = getAthleteTotal(athlete)
+                        return (
+                          <tr key={athlete} className={`border-b border-slate-100 hover:bg-amber-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                            <td className="py-2 pr-4 font-bold text-black text-xs">
+                              <div className="flex items-center gap-2">
+                                <AthleteAvatar name={athlete} size="w-7 h-7" />
+                                <span>{athlete.split(' ').slice(0, 2).join(' ')}</span>
+                              </div>
+                            </td>
+                            {/* Treinos GPS — valor Catapult como sugestão, editável */}
+                            {gpsSessionsWeek.map(s => {
+                              const athleteRow = s.rows0.find(r => normName(r.playerName) === normName(athlete))
+                              const catapultMin = athleteRow?.durationMin ?? null
+                              const storedVal = minutagemData.minutes?.[athlete]?.[s.id]
+                              const displayVal = storedVal !== null && storedVal !== undefined ? storedVal : (catapultMin !== null ? Math.round(catapultMin) : '')
+                              const isFromCatapult = (storedVal === null || storedVal === undefined) && catapultMin !== null
+                              return (
+                                <td key={s.id} className="text-center py-1.5 px-2">
+                                  <div className="relative mx-auto w-16">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="200"
+                                      value={displayVal}
+                                      onChange={e => updateMinute(athlete, s.id, e.target.value)}
+                                      className={`w-full text-center font-black text-xs rounded-lg px-1 py-1.5 border focus:outline-none focus:border-blue-400 transition-colors ${
+                                        isFromCatapult
+                                          ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                          : displayVal > 0 ? 'bg-white border-slate-300 text-black' : 'bg-white border-slate-200 text-slate-400'
+                                      }`}
+                                      placeholder="—"
+                                    />
+                                    {isFromCatapult && (
+                                      <span className="absolute -top-2 -right-1 text-[7px] bg-blue-500 text-white rounded px-0.5 font-black">GPS</span>
+                                    )}
+                                  </div>
+                                </td>
+                              )
+                            })}
+                            {/* Jogos — entrada manual */}
+                            {jogosWeek.map(j => {
+                              const storedVal = minutagemData.minutes?.[athlete]?.[j.id]
+                              return (
+                                <td key={j.id} className="text-center py-1.5 px-2">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="130"
+                                    value={storedVal !== null && storedVal !== undefined ? storedVal : ''}
+                                    onChange={e => updateMinute(athlete, j.id, e.target.value)}
+                                    className={`w-16 text-center font-black text-xs rounded-lg px-1 py-1.5 border focus:outline-none focus:border-green-400 transition-colors mx-auto block ${
+                                      storedVal > 0 ? 'bg-green-50 border-green-300 text-green-800' : 'bg-white border-slate-200 text-slate-400'
+                                    }`}
+                                    placeholder="—"
+                                  />
+                                </td>
+                              )
+                            })}
+                            <td className="text-center py-2 px-2">
+                              <span className={`font-black text-sm ${total > 0 ? 'text-black' : 'text-slate-300'}`}>
+                                {total > 0 ? total : '—'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    {/* Rodapé com totais por sessão */}
+                    <tfoot className="border-t-2 border-slate-300 bg-amber-50">
+                      <tr>
+                        <td className="py-2 pr-4 font-black text-[10px] uppercase text-amber-700">Total Grupo</td>
+                        {gpsSessionsWeek.map(s => (
+                          <td key={s.id} className="text-center py-2 px-2 font-black text-blue-700 text-xs">
+                            {getSessionTotal(s.id) || '—'}
+                          </td>
+                        ))}
+                        {jogosWeek.map(j => (
+                          <td key={j.id} className="text-center py-2 px-2 font-black text-green-700 text-xs">
+                            {getSessionTotal(j.id) || '—'}
+                          </td>
+                        ))}
+                        <td className="text-center py-2 px-2 font-black text-amber-700 text-xs">
+                          {allAthletes.reduce((acc, a) => acc + getAthleteTotal(a), 0) || '—'}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-4 text-[10px] font-bold text-slate-500 border-t border-slate-100 pt-3">
+                <span className="text-blue-600">🔵 Azul GPS = valor puxado automaticamente do Catapult (editável)</span>
+                <span className="text-green-600">🟢 Verde = minutagem de jogo (digitar manualmente via Bits Code ou súmula)</span>
+                <span>Dados salvos automaticamente por microciclo</span>
               </div>
             </div>
           )
