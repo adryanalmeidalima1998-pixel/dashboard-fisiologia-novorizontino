@@ -2,7 +2,7 @@
 import React from 'react'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState, useMemo, Suspense } from 'react'
+import { useState, useMemo, useCallback, useEffect, Suspense } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
 import {
@@ -443,7 +443,7 @@ function AnatomyFigure({ activeRegions, hoveredRegion, onHover }) {
 function IndividualContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { gpsData, bemEstarData, vmaxBaseline, playerPositions: ctxPositions, isExcluded } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, playerPositions: ctxPositions, isExcluded, normalizeName } = useData()
   const [activeTab, setActiveTab] = useState('visao')
   const [hoveredRegion, setHoveredRegion] = useState(null)
   const [showPositionConfig, setShowPositionConfig] = useState(false)
@@ -469,18 +469,45 @@ function IndividualContent() {
   const athlete = selectedAthlete || allAthletes[0] || ''
   const compareMode = !!(compareAthlete && compareAthlete !== athlete)
 
+  // ── FILTRO DE PERÍODO ─────────────────────────────────────────────────────
+  const [periodFilter, setPeriodFilter] = useState('all') // 'all' | '30' | '60' | '90'
+  const periodLabel = { all: 'Todos os treinos', 30: 'Últimos 30 dias', 60: 'Últimos 60 dias', 90: 'Últimos 90 dias' }
+
+  const cutoffDate = useMemo(() => {
+    if (periodFilter === 'all') return null
+    const d = new Date()
+    d.setDate(d.getDate() - parseInt(periodFilter))
+    return d.toISOString().split('T')[0]
+  }, [periodFilter])
+
   const wellinessHistory = useMemo(() => bemEstarData
-    .filter(r => r.playerName === athlete && r.type === 'pre')
-    .sort((a, b) => a.timestamp - b.timestamp).slice(-60), [bemEstarData, athlete])
+    .filter(r => r.playerName === athlete && r.type === 'pre' && (!cutoffDate || r.date >= cutoffDate))
+    .sort((a, b) => a.timestamp - b.timestamp), [bemEstarData, athlete, cutoffDate])
 
   const srpeHistory = useMemo(() => bemEstarData
-    .filter(r => r.playerName === athlete && r.type === 'post' && r.srpeLoad)
-    .sort((a, b) => a.timestamp - b.timestamp).slice(-60), [bemEstarData, athlete])
+    .filter(r => r.playerName === athlete && r.type === 'post' && r.srpeLoad && (!cutoffDate || r.date >= cutoffDate))
+    .sort((a, b) => a.timestamp - b.timestamp), [bemEstarData, athlete, cutoffDate])
 
-  const gpsHistory = useMemo(() => gpsData
-    .flatMap(s => s.rows.filter(r => r.playerName === athlete && r.periodNumber === 0 && !r.isOutlier))
-    .sort((a, b) => new Date(a.sessionDate?.split('/').reverse().join('-')) - new Date(b.sessionDate?.split('/').reverse().join('-'))),
-    [gpsData, athlete])
+  const gpsHistory = useMemo(() => {
+    return gpsData
+      .flatMap(s => {
+        const sd = s.date?.includes('/') ? s.date.split('/').reverse().join('-') : s.date
+        if (cutoffDate && sd < cutoffDate) return []
+        return s.rows.filter(r => r.playerName === athlete && r.periodNumber === 0 && !r.isOutlier)
+      })
+      .sort((a, b) => new Date(a.sessionDate?.split('/').reverse().join('-')) - new Date(b.sessionDate?.split('/').reverse().join('-')))
+  }, [gpsData, athlete, cutoffDate])
+
+  const handlePrint = useCallback(() => { window.print() }, [])
+
+  // ── CMJ — busca local (mesmo endpoint da página CMJ) ─────────────────────
+  const [cmjColetas, setCmjColetas] = useState([])
+  useEffect(() => {
+    fetch('/api/cmj')
+      .then(r => r.ok ? r.json() : { coletas: [] })
+      .then(d => setCmjColetas(d.coletas || []))
+      .catch(() => {})
+  }, [])
 
   const latestSessionPeriods = useMemo(() => {
     if (!gpsData.length) return []
@@ -799,9 +826,28 @@ function IndividualContent() {
             <p className="text-sm font-bold tracking-widest text-slate-600 uppercase">Histórico & Tendências</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap no-print">
           <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">← VOLTAR</button>
           <button onClick={() => setShowPositionConfig(true)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1 rounded-md text-xs font-bold transition-colors border border-slate-200">⚙ Posições</button>
+          {/* Filtro de período */}
+          <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+            {['all', '30', '60', '90'].map(opt => (
+              <button
+                key={opt}
+                onClick={() => setPeriodFilter(opt)}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${periodFilter === opt ? 'bg-amber-500 text-black shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {opt === 'all' ? 'Todos' : `${opt}d`}
+              </button>
+            ))}
+          </div>
+          {/* Botão PDF */}
+          <button
+            onClick={handlePrint}
+            className="bg-amber-500 text-black px-3 py-1 rounded-md text-xs font-black uppercase hover:bg-amber-400 transition-all flex items-center gap-1.5"
+          >
+            🖨️ PDF
+          </button>
           <select value={athlete} onChange={e => { setSelectedAthlete(e.target.value); if (e.target.value === compareAthlete) setCompareAthlete('') }}
             className="border-2 border-amber-500 rounded-lg px-3 py-1.5 text-sm font-black text-black bg-white focus:outline-none max-w-[220px]">
             <option value="">Selecionar atleta...</option>
@@ -1690,6 +1736,13 @@ function IndividualContent() {
 export default function IndividualDashboard() {
   return (
     <div className="min-h-screen bg-white text-black p-4 font-sans">
+      <style>{`
+        @media print {
+          @page { margin: 12mm; size: A4 portrait; }
+          .no-print { display: none !important; }
+          body { font-size: 10px; }
+        }
+      `}</style>
       <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="text-slate-400 font-black uppercase tracking-widest text-sm">Carregando...</div></div>}>
         <IndividualContent />
       </Suspense>
