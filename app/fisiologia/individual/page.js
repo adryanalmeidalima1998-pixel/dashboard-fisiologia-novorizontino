@@ -498,7 +498,10 @@ function IndividualContent() {
       .sort((a, b) => new Date(a.sessionDate?.split('/').reverse().join('-')) - new Date(b.sessionDate?.split('/').reverse().join('-')))
   }, [gpsData, athlete, cutoffDate])
 
-  const handlePrint = useCallback(() => { window.print() }, [])
+  const handlePrint = useCallback(() => {
+    const url = `/print/individual?atleta=${encodeURIComponent(athlete)}&periodo=${periodFilter}`
+    window.open(url, '_blank', 'noopener')
+  }, [athlete, periodFilter])
 
   // ── CMJ — busca local (mesmo endpoint da página CMJ) ─────────────────────
   const [cmjColetas, setCmjColetas] = useState([])
