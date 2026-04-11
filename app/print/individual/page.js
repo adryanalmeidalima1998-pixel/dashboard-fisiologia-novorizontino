@@ -104,8 +104,12 @@ function PrintContent() {
   const athleteName  = searchParams.get('atleta') || ''
   const periodParam  = searchParams.get('periodo') || 'all'
 
-  const { gpsData, bemEstarData, vmaxBaseline, playerPositions, normalizeName } = useData()
+  const { gpsData, bemEstarData, vmaxBaseline, playerPositions, normalizeName, fetchBemEstar, isLoadingBemEstar } = useData()
   const norm = normalizeName(athleteName)
+
+  useEffect(() => {
+    if (bemEstarData.length === 0) fetchBemEstar()
+  }, [])
 
   const cutoffDate = useMemo(() => {
     if (periodParam === 'all') return null
@@ -222,6 +226,7 @@ function PrintContent() {
   const acwrPoints = asc.map(s => acwrMap[s.sortable])
 
   if (!athleteName) return <div style={{ padding: 40, fontFamily: 'sans-serif' }}>Atleta não especificado.</div>
+  if (isLoadingBemEstar) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: '#94a3b8', fontWeight: 700 }}>Carregando dados de bem-estar...</div>
 
   const stripe = { position: 'absolute', top: 0, left: 0, right: 0, height: 5, background: 'linear-gradient(90deg,#f59e0b 0%,#fbbf24 55%,#1e293b 100%)' }
   const page   = { width: 794, background: 'white', padding: '28px 32px', position: 'relative', fontFamily: "'Inter',sans-serif" }
