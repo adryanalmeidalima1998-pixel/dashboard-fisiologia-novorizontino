@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useMemo, useState, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
 import ExportPdfButton from '../../../components/ExportPdfButton'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts'
@@ -424,7 +424,6 @@ function EditContextModal({ game, onClose, onSave }) {
 export default function CorrelacaoPage() {
   const router = useRouter()
   const { gpsData, vmaxBaseline, isExcluded, fetchGpsSessions } = useData()
-  const contentRef = useRef(null)
 
   const [filterMando,  setFilterMando]  = useState('all')
   const [filterResult, setFilterResult] = useState('all')
@@ -641,7 +640,7 @@ export default function CorrelacaoPage() {
 
   return (
     <div className="min-h-screen bg-white text-black p-4 font-sans">
-      <div className="max-w-[1400px] mx-auto flex flex-col gap-5" ref={contentRef} data-pdf-root>
+      <div className="max-w-[1400px] mx-auto flex flex-col gap-5" data-pdf-root>
 
         {/* HEADER */}
         <header className="flex flex-wrap justify-between items-center border-b-4 border-amber-500 pb-3 gap-3">
@@ -655,7 +654,7 @@ export default function CorrelacaoPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <ExportPdfButton contentRef={contentRef} filename="gps-resultado" />
+            <ExportPdfButton filename="gps-resultado" />
             <button onClick={() => router.push('/fisiologia')}
               className="bg-slate-200 text-slate-800 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">
               ← VOLTAR
