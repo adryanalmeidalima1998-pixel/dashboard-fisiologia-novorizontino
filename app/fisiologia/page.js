@@ -611,6 +611,8 @@ export default function Fisiologia() {
                             ))}
                           </div>
                         </div>
+                      )}
+
                       {p.meta.sessionType === 'jogo' && (
                         <div>
                           <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Mando</label>
