@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useMemo, useRef } from 'react'
 import { useData, normalizeName } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
-import ExportPdfButton from '../../../../components/ExportPdfButton'
+import ExportPdfButton from '../../../components/ExportPdfButton'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
   ReferenceLine, ResponsiveContainer,
