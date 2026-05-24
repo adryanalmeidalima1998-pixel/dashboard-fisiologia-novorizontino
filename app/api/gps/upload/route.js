@@ -92,6 +92,7 @@ export async function POST(request) {
     const sessionPeriod = (formData.get('session_period') || '').trim()       // 'manha' | 'tarde' | 'noite'
     const opponent      = (formData.get('opponent') || '').trim()             // nome do adversário (se jogo)
     const result        = (formData.get('result') || '').trim()               // 'V' | 'E' | 'D' (se jogo)
+    const mando         = (formData.get('mando') || '').trim()                // 'M' | 'V' (mandante/visitante)
 
     if (!file) {
       return Response.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 })
@@ -116,6 +117,7 @@ export async function POST(request) {
       period: sessionPeriod || null,
       opponent: opponent || null,
       result: result || null,
+      mando: mando || null,
     }
 
     // Upsert — se (data + nome) já existe, atualiza
