@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import ExportPdfButton from '../../../../components/ExportPdfButton'
+import ExportPdfButton from '../../../components/ExportPdfButton'
 
 const POSICOES = ['GK', 'ZAG', 'LD', 'LE', 'VOL', 'MC', 'MEI', 'PD', 'PE', 'CA', 'ATA']
 
