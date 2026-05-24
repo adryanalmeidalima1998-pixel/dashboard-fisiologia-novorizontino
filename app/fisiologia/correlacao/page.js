@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useRef } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
-import ExportPdfButton from '../../../../components/ExportPdfButton'
+import ExportPdfButton from '../../../components/ExportPdfButton'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts'
 
 // ─── ESTATÍSTICAS ─────────────────────────────────────────────────────────────
