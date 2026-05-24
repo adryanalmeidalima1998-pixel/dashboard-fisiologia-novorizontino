@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useMemo, useRef } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
-import ExportPdfButton from '../../../../components/ExportPdfButton'
+import ExportPdfButton from '../../../components/ExportPdfButton'
 
 // ─── CONFIGURAÇÃO DE MÉTRICAS ─────────────────────────────────────────────────
 const METRICS = [
