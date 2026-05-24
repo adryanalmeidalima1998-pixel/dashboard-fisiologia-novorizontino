@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
 import ExportPdfButton from '../../../components/ExportPdfButton'
@@ -152,7 +152,6 @@ function RankingSection({ title, emoji, athletes, metric, avg, isTop, onAthleteC
 
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
 export default function DestaquesDashboard() {
-  const contentRef = useRef(null)
   const router = useRouter()
   const { gpsData, playerPositions, vmaxBaseline, isExcluded } = useData()
 
@@ -281,7 +280,7 @@ export default function DestaquesDashboard() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-white text-black p-4 font-sans" ref={contentRef} data-pdf-root>
+    <div className="min-h-screen bg-white text-black p-4 font-sans" data-pdf-root>
       <div className="max-w-[1400px] mx-auto flex flex-col gap-5">
 
         {/* HEADER */}
@@ -294,7 +293,7 @@ export default function DestaquesDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <ExportPdfButton contentRef={contentRef} filename="destaques-sessao" />
+            <ExportPdfButton filename="destaques-sessao" />
             <button
               onClick={() => router.push('/fisiologia')}
               className="bg-slate-200 text-slate-800 px-3 py-1.5 rounded-md text-xs font-black hover:bg-slate-300 transition-colors"
