@@ -1,8 +1,9 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
+import ExportPdfButton from '../../../../components/ExportPdfButton'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts'
 
 // ─── ESTATÍSTICAS ─────────────────────────────────────────────────────────────
@@ -66,7 +67,43 @@ function cliffsDelta(groupA, groupB) {
   return (fav - unfav) / total
 }
 
-// Força para Spearman/Kendall (escala nova)
+// Coeficiente Eta — diferença entre grupos categóricos (V/E/D)
+// groups: { V: [values], E: [values], D: [values] }
+function etaCoefficient(groups) {
+  const all = Object.values(groups).flat()
+  if (all.length < 3) return null
+  const grandMean = all.reduce((a, b) => a + b, 0) / all.length
+  const ssBetween = Object.values(groups).reduce((acc, vals) => {
+    if (!vals.length) return acc
+    const gMean = vals.reduce((a, b) => a + b, 0) / vals.length
+    return acc + vals.length * Math.pow(gMean - grandMean, 2)
+  }, 0)
+  const ssTotal = all.reduce((acc, v) => acc + Math.pow(v - grandMean, 2), 0)
+  if (ssTotal === 0) return 0
+  const eta2 = ssBetween / ssTotal
+  return { eta: Math.sqrt(eta2), eta2 }
+}
+
+// Força para Eta
+function etaLabel(eta) {
+  if (eta == null) return '—'
+  if (eta >= 0.80) return 'Muito forte'
+  if (eta >= 0.60) return 'Forte'
+  if (eta >= 0.40) return 'Moderada'
+  if (eta >= 0.20) return 'Fraca'
+  return 'Muito fraca'
+}
+
+function eta2Label(eta2) {
+  if (eta2 == null) return '—'
+  const p = eta2 * 100
+  if (p >= 30) return 'Diferença relevante'
+  if (p >= 15) return 'Diferença moderada'
+  if (p >= 5)  return 'Diferença baixa'
+  return 'Pouca diferença'
+}
+
+// Força para Spearman/Kendall
 function forceLabel(v) {
   const a = Math.abs(v)
   if (a >= 0.65) return 'Sinal forte'
@@ -76,7 +113,7 @@ function forceLabel(v) {
   return 'Sem padrão claro'
 }
 
-// Força para Cliff's Delta (escala futebolística)
+// Força para Cliff's Delta
 function deltaLabel(v) {
   if (v == null) return '—'
   const a = Math.abs(v)
@@ -244,6 +281,22 @@ function DirBadge({ value }) {
     : <span className="text-xs font-black text-red-600">↓ Negativa</span>
 }
 
+function EtaBadge({ eta, eta2 }) {
+  if (eta == null) return <span className="text-slate-300 font-black text-sm">—</span>
+  const color = eta >= 0.60 ? 'bg-violet-100 text-violet-800'
+    : eta >= 0.40 ? 'bg-blue-100 text-blue-700'
+    : eta >= 0.20 ? 'bg-slate-100 text-slate-600'
+    : 'bg-slate-50 text-slate-400'
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className={`inline-block font-black text-sm px-2 py-0.5 rounded ${color}`}>
+        {eta.toFixed(2)}
+      </span>
+      <span className="text-[9px] text-slate-400 font-bold">{(eta2 * 100).toFixed(0)}% variação</span>
+    </div>
+  )
+}
+
 function PctBadge({ v, inv = false }) {
   if (v == null) return <span className="text-slate-300 text-xs">—</span>
   const isGood = inv ? v < 0 : v > 0
@@ -371,6 +424,7 @@ function EditContextModal({ game, onClose, onSave }) {
 export default function CorrelacaoPage() {
   const router = useRouter()
   const { gpsData, vmaxBaseline, isExcluded, fetchGpsSessions } = useData()
+  const contentRef = useRef(null)
 
   const [filterMando,  setFilterMando]  = useState('all')
   const [filterResult, setFilterResult] = useState('all')
@@ -458,21 +512,35 @@ export default function CorrelacaoPage() {
   // Qual resultado único está selecionado (para modo perfil)
   const singleResult = isProfileMode ? [...uniqueResults][0] : null
 
-  // ── Modo correlação: Kendall + Spearman + Cliff's Delta ───────────────────
+  // ── Modo correlação: Eta + Kendall + Spearman + Cliff's Delta ────────────
   const correlations = useMemo(() => {
-    if (isProfileMode || filteredGames.length < 4) return []
+    if (isProfileMode || filteredGames.length < 3) return []
     const pts = filteredGames.map(g => g.pts)
     const wins  = filteredGames.filter(g => g.result === 'V')
+    const draws = filteredGames.filter(g => g.result === 'E')
     const loses = filteredGames.filter(g => g.result === 'D')
     return METRICS.map(m => {
       const xs = filteredGames.map(g => g[m.key])
-      const k = kendallTauB(xs, pts)
-      const s = spearman(xs, pts)
+      const k = filteredGames.length >= 4 ? kendallTauB(xs, pts) : null
+      const s = filteredGames.length >= 4 ? spearman(xs, pts) : null
       const cd = (wins.length && loses.length)
         ? cliffsDelta(wins.map(g => g[m.key]), loses.map(g => g[m.key]))
         : null
-      return { ...m, k, s, cd }
-    }).sort((a, b) => Math.abs(b.cd ?? b.k) - Math.abs(a.cd ?? a.k))
+      // Eta: separa por grupo de resultado
+      const etaGroups = {
+        ...(wins.length  ? { V: wins.map(g => g[m.key])  } : {}),
+        ...(draws.length ? { E: draws.map(g => g[m.key]) } : {}),
+        ...(loses.length ? { D: loses.map(g => g[m.key]) } : {}),
+      }
+      const etaResult = Object.keys(etaGroups).length >= 2 ? etaCoefficient(etaGroups) : null
+      // Qual grupo tem maior média
+      const groupAvgs = Object.entries(etaGroups).map(([r, vals]) => ({
+        r, avg: vals.reduce((a, b) => a + b, 0) / vals.length
+      }))
+      const topGroup  = groupAvgs.reduce((a, b) => b.avg > a.avg ? b : a, groupAvgs[0])
+      const botGroup  = groupAvgs.reduce((a, b) => b.avg < a.avg ? b : a, groupAvgs[0])
+      return { ...m, k, s, cd, eta: etaResult?.eta ?? null, eta2: etaResult?.eta2 ?? null, topGroup: topGroup?.r, botGroup: botGroup?.r }
+    }).sort((a, b) => (b.eta ?? 0) - (a.eta ?? 0))  // ordena por Eta
   }, [filteredGames, isProfileMode])
 
   // ── Modo perfil: comparação vs média geral ────────────────────────────────
@@ -502,10 +570,11 @@ export default function CorrelacaoPage() {
     const pts = V * 3 + E
     const max = gamesWithResult.length * 3
     const aprov = max > 0 ? ((pts / max) * 100).toFixed(0) : '0'
+    const topEta = correlations.find(c => c.eta != null)
     const bestCd  = correlations.find(c => (c.cd ?? c.k) > 0)
     const worstCd = [...correlations].reverse().find(c => (c.cd ?? c.k) < 0)
     const confianca = gamesWithResult.length >= 20 ? 'Alta' : gamesWithResult.length >= 12 ? 'Moderada' : 'Baixa'
-    return { total: allGames.length, withResult: gamesWithResult.length, V, E, D, aprov, bestCd, worstCd, confianca }
+    return { total: allGames.length, withResult: gamesWithResult.length, V, E, D, aprov, topEta, bestCd, worstCd, confianca }
   }, [gamesWithResult, allGames, correlations])
 
   // ── Gráficos ──────────────────────────────────────────────────────────────
@@ -539,19 +608,24 @@ export default function CorrelacaoPage() {
       return txt
     }
 
-    if (!correlations.length) return 'Ajuste os filtros ou adicione mais jogos para gerar insights.'
+    if (!correlations.length) return 'Ajuste os filtros ou adicione mais jogos para gerar análises.'
 
-    const relevantes = correlations.filter(c => Math.abs(c.cd ?? c.k) >= 0.10)
-    if (!relevantes.length) {
-      return `A amostra ainda é pequena (${filteredGames.length} jogos). Nenhuma métrica apresentou sinal robusto, mas há tendências iniciais a monitorar. Continue registrando jogos para confirmar padrões competitivos.`
+    const topEta = correlations.filter(c => c.eta != null).slice(0, 2)
+    let txt = `A amostra tem ${filteredGames.length} jogos. A leitura principal usa o Coeficiente Eta, que mede se as métricas GPS diferem entre vitória, empate e derrota sem depender de ordenação linear. `
+    if (topEta.length) {
+      const nomes = topEta.map(c => `${c.label.toLowerCase()} (η${c.eta?.toFixed(2)}, ${(c.eta2 * 100).toFixed(0)}% da variação)`).join(' e ')
+      txt += `As métricas com maior diferença entre resultados foram ${nomes}. `
     }
-    const pos = relevantes.filter(c => (c.cd ?? c.k) > 0).map(c => c.label.toLowerCase())
-    const neg = relevantes.filter(c => (c.cd ?? c.k) < 0).map(c => c.label.toLowerCase())
-    let txt = 'Na amostra atual'
-    if (pos.length) txt += `, ${pos.join(' e ')} aparecem mais associadas aos melhores resultados`
-    if (neg.length) txt += `${pos.length ? ', enquanto' : ','} ${neg.join(' e ')} aparecem mais nos jogos de pior resultado`
-    const maxK = Math.max(...relevantes.map(c => Math.abs(c.cd ?? c.k)))
-    txt += `. Força do sinal: ${forceLabel(maxK)}. Os padrões devem ser lidos como tendência${stats.confianca === 'Baixa' ? ' inicial' : ''}, não conclusão definitiva.`
+    const relevantes = correlations.filter(c => Math.abs(c.cd ?? c.k ?? 0) >= 0.10)
+    if (relevantes.length) {
+      const pos = relevantes.filter(c => (c.cd ?? c.k ?? 0) > 0).map(c => c.label.toLowerCase())
+      const neg = relevantes.filter(c => (c.cd ?? c.k ?? 0) < 0).map(c => c.label.toLowerCase())
+      if (pos.length) txt += `Pelo índice de dominância, ${pos.join(' e ')} aparecem mais nas vitórias. `
+      if (neg.length) txt += `Já ${neg.join(' e ')} aparecem mais nas derrotas. `
+    } else {
+      txt += `Kendall e Spearman ainda não indicam tendência ordinal robusta com a amostra atual — continue registrando jogos. `
+    }
+    txt += `Os padrões devem ser lidos como tendência${stats.confianca === 'Baixa' ? ' inicial' : ''}, não conclusão definitiva.`
     return txt
   }, [filteredGames, isProfileMode, singleResult, correlations, profileData, stats.confianca])
 
@@ -567,7 +641,7 @@ export default function CorrelacaoPage() {
 
   return (
     <div className="min-h-screen bg-white text-black p-4 font-sans">
-      <div className="max-w-[1400px] mx-auto flex flex-col gap-5">
+      <div className="max-w-[1400px] mx-auto flex flex-col gap-5" ref={contentRef} data-pdf-root>
 
         {/* HEADER */}
         <header className="flex flex-wrap justify-between items-center border-b-4 border-amber-500 pb-3 gap-3">
@@ -581,6 +655,7 @@ export default function CorrelacaoPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <ExportPdfButton contentRef={contentRef} filename="gps-resultado" />
             <button onClick={() => router.push('/fisiologia')}
               className="bg-slate-200 text-slate-800 px-3 py-1.5 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">
               ← VOLTAR
@@ -600,8 +675,8 @@ export default function CorrelacaoPage() {
             { label: 'Empates',  value: stats.E, color: 'text-amber-600' },
             { label: 'Derrotas', value: stats.D, color: 'text-red-600' },
             { label: 'Aproveitamento', value: stats.aprov + '%', color: 'text-black' },
+            { label: 'Maior Eta (diferença)', value: stats.topEta ? `${stats.topEta.label.split(' ')[0]} η${stats.topEta.eta?.toFixed(2)}` : '—', color: 'text-violet-700', small: true },
             { label: 'Melhor Assoc. +', value: stats.bestCd ? `${stats.bestCd.label.split(' ')[0]} ${fmtCorr(stats.bestCd.cd ?? stats.bestCd.k)}` : '—', color: 'text-green-700', small: true },
-            { label: 'Maior Assoc. −',  value: stats.worstCd ? `${stats.worstCd.label.split(' ')[0]} ${fmtCorr(stats.worstCd.cd ?? stats.worstCd.k)}` : '—', color: 'text-red-700',   small: true },
             { label: 'Confiabilidade', value: stats.confianca, color: stats.confianca === 'Alta' ? 'text-green-600' : stats.confianca === 'Moderada' ? 'text-amber-600' : 'text-red-600', small: true },
           ].map(({ label, value, color, small }) => (
             <div key={label} className="bg-slate-50 border border-slate-100 rounded-xl p-3">
@@ -725,21 +800,22 @@ export default function CorrelacaoPage() {
                   <div className="border border-slate-100 rounded-xl overflow-hidden">
                     <div className="bg-slate-50 border-b border-slate-100 px-4 py-3 flex items-center justify-between">
                       <div>
-                        <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">Correlação GPS × Pontuação</h2>
+                        <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">Análise GPS × Resultado</h2>
                         <p className="text-[10px] text-slate-400 font-medium mt-0.5">
-                          {filteredGames.length} jogos · V=3 E=1 D=0 · Ordenado por Índice de Dominância
+                          {filteredGames.length} jogos · Ordenado por Eta (diferença entre V/E/D) · Dominância compara V×D par a par
                         </p>
                       </div>
                       <div className="flex gap-3 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-400 inline-block"/>Eta</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block"/>Positiva</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block"/>Negativa</span>
                       </div>
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[900px]">
+                      <table className="w-full min-w-[1000px]">
                         <thead>
                           <tr className="border-b border-slate-100">
-                            {['Métrica GPS','Dominância V×D','Kendall Tau-b','Spearman','Direção','Força','Hipótese de Leitura'].map(h => (
+                            {['Métrica GPS','Eta','Eta²','Maior média','Kendall','Dominância V×D','Força','Hipótese'].map(h => (
                               <th key={h} className="text-left text-[9px] font-black uppercase tracking-widest text-slate-400 px-4 py-3">{h}</th>
                             ))}
                           </tr>
@@ -748,17 +824,29 @@ export default function CorrelacaoPage() {
                           {correlations.map(c => (
                             <tr key={c.key} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                               <td className="px-4 py-3 text-sm font-black text-slate-800">{c.label}</td>
+                              <td className="px-4 py-3"><EtaBadge eta={c.eta} eta2={c.eta2} /></td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-sm font-black text-slate-700">{c.eta2 != null ? (c.eta2 * 100).toFixed(0) + '%' : '—'}</span>
+                                  <span className="text-[9px] text-slate-400 font-bold">{eta2Label(c.eta2)}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                {c.topGroup ? (
+                                  <span className={`text-xs font-black ${RESULT_CFG[c.topGroup]?.text || 'text-slate-600'}`}>
+                                    {RESULT_CFG[c.topGroup]?.label || c.topGroup}
+                                  </span>
+                                ) : <span className="text-slate-300 text-xs">—</span>}
+                              </td>
+                              <td className="px-4 py-3"><CorrBadge value={c.k} /></td>
                               <td className="px-4 py-3">
                                 <div className="flex flex-col gap-0.5">
                                   <DeltaBadge value={c.cd} />
                                   <span className="text-[9px] text-slate-400 font-bold">{deltaLabel(c.cd)}</span>
                                 </div>
                               </td>
-                              <td className="px-4 py-3"><CorrBadge value={c.k} /></td>
-                              <td className="px-4 py-3"><CorrBadge value={c.s} /></td>
-                              <td className="px-4 py-3"><DirBadge value={c.cd ?? c.k} /></td>
-                              <td className="px-4 py-3 text-xs font-bold text-slate-600">{forceLabel(c.k)}</td>
-                              <td className="px-4 py-3 text-xs text-slate-500 max-w-[260px] leading-relaxed">{getHypothesis(c.key, c.cd ?? c.k)}</td>
+                              <td className="px-4 py-3 text-xs font-bold text-slate-600">{etaLabel(c.eta)}</td>
+                              <td className="px-4 py-3 text-xs text-slate-500 max-w-[220px] leading-relaxed">{getHypothesis(c.key, c.cd ?? c.k ?? 0)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1002,19 +1090,22 @@ export default function CorrelacaoPage() {
                   })
                 ) : (
                   correlations.map(c => {
-                    const val = c.cd ?? c.k
+                    const val = c.cd ?? c.k ?? 0
                     const pos = val >= 0
-                    const relevant = Math.abs(val) >= 0.10
+                    const etaRelevant = (c.eta ?? 0) >= 0.20
+                    const cdRelevant  = Math.abs(val) >= 0.10
+                    const relevant = etaRelevant || cdRelevant
                     const border = relevant
                       ? (pos ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200')
                       : 'bg-slate-50 border-slate-200'
                     const barColor = relevant ? (pos ? 'bg-green-400' : 'bg-red-400') : 'bg-slate-300'
+                    const etaStr = c.eta != null ? ` · η${c.eta.toFixed(2)} (${(c.eta2 * 100).toFixed(0)}%)` : ''
                     return (
                       <div key={c.key} className={`flex gap-3 p-3 rounded-lg border ${border}`}>
                         <div className={`w-1 rounded-full flex-shrink-0 ${barColor}`} />
                         <div>
                           <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${relevant ? (pos ? 'text-green-700' : 'text-red-700') : 'text-slate-500'}`}>
-                            {deltaLabel(c.cd)} · {c.label} · Dominância {fmtCorr(c.cd)} · Kendall {fmtCorr(c.k)}
+                            {etaLabel(c.eta)}{etaStr} · {c.label} · Dominância {fmtCorr(c.cd)}
                           </p>
                           <p className="text-xs text-slate-600 leading-relaxed">{getHypothesis(c.key, val)}</p>
                         </div>
@@ -1032,7 +1123,7 @@ export default function CorrelacaoPage() {
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
               <h2 className="text-xs font-black uppercase tracking-widest text-slate-600 mb-2">Metodologia</h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                O resultado foi convertido em pontuação: vitória = 3, empate = 1 e derrota = 0. Foram aplicados três métodos: <strong className="text-slate-700">Kendall Tau-b</strong> e <strong className="text-slate-700">Spearman</strong> (correlação com pontuação por ranking) e o <strong className="text-slate-700">Índice de Dominância por Resultado</strong> (baseado em Cliff's Delta / correlação rank-biserial), que compara diretamente vitórias e derrotas par a par. Valores positivos do índice de dominância indicam que a métrica tende a ser maior nas vitórias; negativos indicam que tende a ser maior nas derrotas. Quando o filtro retorna apenas um tipo de resultado, a página entra em Modo Perfil: compara o recorte contra a média geral de todos os jogos. Os achados devem ser interpretados junto com mando, adversário e modelo de jogo.
+                Foram aplicados quatro métodos complementares. O <strong className="text-slate-700">Coeficiente Eta (η)</strong> mede se as médias das métricas GPS diferem entre vitória, empate e derrota — indicado quando uma variável é categórica (resultado) e outra é quantitativa (GPS). O <strong className="text-slate-700">Eta² (η²)</strong> indica quantos % da variação total da métrica estão associados ao tipo de resultado. O <strong className="text-slate-700">Índice de Dominância por Resultado</strong> (Cliff's Delta) compara vitórias e derrotas par a par: valores positivos indicam que a métrica tende a ser maior nas vitórias. O <strong className="text-slate-700">Kendall Tau-b</strong> e o <strong className="text-slate-700">Spearman</strong> correlacionam a métrica com a pontuação (V=3 E=1 D=0) por ranking — mais estáveis com mais jogos. Quando o filtro retorna apenas um tipo de resultado, a página entra em Modo Perfil e compara o recorte contra a média geral. Nenhum método prova causalidade.
               </p>
             </div>
           </>
