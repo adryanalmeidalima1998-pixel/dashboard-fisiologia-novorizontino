@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import ExportPdfButton from '../../../../components/ExportPdfButton'
 
 const POSICOES = ['GK', 'ZAG', 'LD', 'LE', 'VOL', 'MC', 'MEI', 'PD', 'PE', 'CA', 'ATA']
 
@@ -510,6 +511,7 @@ function SeverityBadge({ severity }) {
 // ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
 export default function AtletasPage() {
   const router = useRouter()
+  const contentRef = useRef(null)
   const [athletes, setAthletes] = useState([])
   const [injuries, setInjuries] = useState([])
   const [loading, setLoading] = useState(true)
@@ -608,7 +610,7 @@ export default function AtletasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-black p-4 font-sans">
+    <div className="min-h-screen bg-white text-black p-4 font-sans" ref={contentRef} data-pdf-root>
       <div className="max-w-[1400px] mx-auto flex flex-col gap-5">
 
         {/* HEADER */}
@@ -621,6 +623,7 @@ export default function AtletasPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ExportPdfButton contentRef={contentRef} filename="cadastro-atletas" />
             <button onClick={() => router.push('/fisiologia')}
               className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">
               ← VOLTAR
