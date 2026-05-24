@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import { useData, normalizeName } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
 import ExportPdfButton from '../../../components/ExportPdfButton'
@@ -83,7 +83,6 @@ function AcwrTooltip({ active, payload, label }) {
 
 // ─── PAGINA ───────────────────────────────────────────────────────────────────
 export default function AcwrPage() {
-  const contentRef = useRef(null)
   const router = useRouter()
   const { gpsData, bemEstarData, playerPositions, nameAliases, isExcluded } = useData()
 
@@ -330,7 +329,7 @@ export default function AcwrPage() {
   const unitLabel    = metricKey === 'gps' ? 'm' : 'UA'
 
   return (
-    <div className="min-h-screen bg-white text-black p-4 font-sans" ref={contentRef} data-pdf-root>
+    <div className="min-h-screen bg-white text-black p-4 font-sans" data-pdf-root>
       <div className="max-w-[1400px] mx-auto flex flex-col gap-5">
 
         {/* HEADER */}
@@ -343,7 +342,7 @@ export default function AcwrPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <ExportPdfButton contentRef={contentRef} filename="acwr" />
+            <ExportPdfButton filename="acwr" />
             <button onClick={() => router.push('/fisiologia')}
               className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">
               Voltar
