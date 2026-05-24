@@ -1,9 +1,10 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState, useMemo, Suspense } from 'react'
+import { useState, useMemo, Suspense, useRef } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
+import ExportPdfButton from '../../../../components/ExportPdfButton'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
   ReferenceLine, Cell, LabelList, ResponsiveContainer,
@@ -111,6 +112,7 @@ function MetricBarChart({ data, metric, avg, onAthleteClick }) {
 
 // ─── PÁGINA ──────────────────────────────────────────────────────────────────
 function SessaoContent() {
+  const contentRef = useRef(null)
   const router = useRouter()
   const params = useSearchParams()
   const { gpsData, vmaxBaseline, playerPositions, isExcluded } = useData()
@@ -205,7 +207,7 @@ function SessaoContent() {
   }, [athletes])
 
   return (
-    <div className="min-h-screen bg-white text-black p-4 font-sans">
+    <div className="min-h-screen bg-white text-black p-4 font-sans" ref={contentRef} data-pdf-root>
       <div className="max-w-[1600px] mx-auto flex flex-col gap-5">
 
         {/* HEADER */}
@@ -218,6 +220,7 @@ function SessaoContent() {
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
+            <ExportPdfButton contentRef={contentRef} filename="sessao-gps" />
             <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1.5 rounded-md text-xs font-black hover:bg-slate-300 transition-colors">
               ← VOLTAR
             </button>
