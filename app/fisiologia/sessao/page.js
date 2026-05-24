@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useMemo, Suspense, useRef } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
-import ExportPdfButton from '../../../../components/ExportPdfButton'
+import ExportPdfButton from '../../../components/ExportPdfButton'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
   ReferenceLine, Cell, LabelList, ResponsiveContainer,
