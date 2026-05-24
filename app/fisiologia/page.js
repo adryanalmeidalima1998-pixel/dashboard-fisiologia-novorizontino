@@ -6,7 +6,7 @@ import { useEffect, useState, useMemo } from 'react'
 
 const PERIOD_LABELS = { manha: '🌅 Manhã', tarde: '☀️ Tarde', noite: '🌙 Noite' }
 const RESULT_LABELS = { V: '✅ Vitória', E: '🟡 Empate', D: '❌ Derrota' }
-const EMPTY_META = { sessionType: 'treino', sessionPeriod: 'tarde', opponent: '', result: '' }
+const EMPTY_META = { sessionType: 'treino', sessionPeriod: 'tarde', opponent: '', result: '', mando: '' }
 
 // ── Cópia local do calcReadiness (mesma lógica do Dashboard Diário) ────────────
 function calcReadiness(preData, acwr, daysSinceLastGps) {
@@ -607,6 +607,18 @@ export default function Fisiologia() {
                               <button key={val} onClick={() => updateMeta(i, 'result', p.meta.result === val ? '' : val)}
                                 className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-all ${p.meta.result === val ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-400'}`}>
                                 {icon} {val}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      {p.meta.sessionType === 'jogo' && (
+                        <div>
+                          <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-1">Mando</label>
+                          <div className="flex gap-1">
+                            {[['M', '🏠 Mandante'], ['V', '✈️ Visitante']].map(([val, icon]) => (
+                              <button key={val} onClick={() => updateMeta(i, 'mando', p.meta.mando === val ? '' : val)}
+                                className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-all ${p.meta.mando === val ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-400'}`}>
+                                {icon}
                               </button>
                             ))}
                           </div>
