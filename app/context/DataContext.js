@@ -402,6 +402,7 @@ export function DataProvider({ children }) {
       if (item.metadata.sessionPeriod) formData.append('session_period', item.metadata.sessionPeriod)
       if (item.metadata.opponent) formData.append('opponent', item.metadata.opponent)
       if (item.metadata.result) formData.append('result', item.metadata.result)
+      if (item.metadata.mando) formData.append('mando', item.metadata.mando)
 
       try {
         const res = await fetch('/api/gps/upload', { method: 'POST', body: formData })
