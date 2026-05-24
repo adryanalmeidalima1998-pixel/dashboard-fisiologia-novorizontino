@@ -1,9 +1,10 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useData, calcVmaxPct } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
+import ExportPdfButton from '../../../../components/ExportPdfButton'
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 function parseDate(dateStr) {
@@ -55,6 +56,7 @@ function StatCard({ label, value, unit = '', sub, color = 'text-black', bg = 'bg
 
 // ─── PÁGINA ───────────────────────────────────────────────────────────────────
 export default function JogosPage() {
+  const contentRef = useRef(null)
   const router = useRouter()
   const { gpsData, bemEstarData, vmaxBaseline, isExcluded } = useData()
   const [selectedGameId, setSelectedGameId] = useState(null)
@@ -170,7 +172,7 @@ export default function JogosPage() {
   const opponent = meta.opponent || '—'
 
   return (
-    <div className="min-h-screen bg-white text-black p-4 font-sans">
+    <div className="min-h-screen bg-white text-black p-4 font-sans" ref={contentRef} data-pdf-root>
       <div className="max-w-[1500px] mx-auto flex flex-col gap-5">
 
         {/* HEADER */}
@@ -182,7 +184,10 @@ export default function JogosPage() {
               <p className="text-sm font-bold tracking-widest text-slate-600 uppercase">Análise pós-jogo & Recuperação</p>
             </div>
           </div>
-          <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">← VOLTAR</button>
+          <div className="flex items-center gap-2">
+            <ExportPdfButton contentRef={contentRef} filename="dashboard-jogos" />
+            <button onClick={() => router.push('/fisiologia')} className="bg-slate-200 text-slate-800 px-3 py-1 rounded-md text-xs font-bold hover:bg-slate-300 transition-colors">← VOLTAR</button>
+          </div>
         </header>
 
         {allGames.length === 0 ? (
