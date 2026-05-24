@@ -135,7 +135,7 @@ const RESULT_CFG = {
   D: { label: 'Derrota', pts: 0, text: 'text-red-600',   bar: '#ef4444', border: 'border-red-200',   bg: 'bg-red-50' },
 }
 
-const COMPETICOES = ['Série C', 'Copa do Brasil', 'Paulistão', 'Amistoso', 'Outra']
+const COMPETICOES = ['Série C', 'Copa do Brasil', 'Paulistão', 'Brasileiro SUB20 Série B', 'Paulistão SUB20 Série A', 'Copa Sul Sudeste', 'Amistoso', 'Outra']
 
 // ─── COMPONENTES PEQUENOS ─────────────────────────────────────────────────────
 
