@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useData, normalizeName } from '../../context/DataContext'
 import { AthleteAvatar } from '../../utils/athletePhotos'
+import CmjReport from './CmjReport'
 
 // ─── ZONAS ────────────────────────────────────────────────────────────────────
 const ZONES = [
@@ -269,6 +270,7 @@ export default function CMJPage() {
             { key: 'registrar', label: '📥 Registrar Coleta'    },
             { key: 'avaliacao', label: '📋 Avaliação Física'    },
             { key: 'historico', label: '📅 Histórico por Dia'   },
+            { key: 'relatorio', label: '📊 Relatório'          },
           ].map(t => (
             <button
               key={t.key}
@@ -776,6 +778,15 @@ export default function CMJPage() {
             </div>
           )
         })()}
+
+        {/* ── ABA RELATÓRIO ── */}
+        {activeTab === 'relatorio' && (
+          isLoading ? (
+            <div className="py-20 text-center text-slate-400 text-sm font-bold">Carregando...</div>
+          ) : (
+            <CmjReport comColeta={comColeta} zoneCounts={zoneCounts} />
+          )
+        )}
 
         {/* FOOTER */}
         <footer className="flex justify-between items-center border-t-2 border-slate-900 pt-3 mt-2">
