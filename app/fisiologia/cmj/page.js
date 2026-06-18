@@ -54,7 +54,7 @@ function getGps2d(gpsData, name, refDate) {
 // ─── COMPONENTE ───────────────────────────────────────────────────────────────
 export default function CMJPage() {
   const router = useRouter()
-  const { gpsData, excludedNamesNorm } = useData()
+  const { gpsData, excludedNamesNorm, playerPositions } = useData()
 
   const [coletas,    setColetas]    = useState([])
   const [isLoading,  setIsLoading]  = useState(true)
@@ -784,7 +784,7 @@ export default function CMJPage() {
           isLoading ? (
             <div className="py-20 text-center text-slate-400 text-sm font-bold">Carregando...</div>
           ) : (
-            <CmjReport comColeta={comColeta} zoneCounts={zoneCounts} />
+            <CmjReport comColeta={comColeta} zoneCounts={zoneCounts} playerPositions={playerPositions} />
           )
         )}
 
