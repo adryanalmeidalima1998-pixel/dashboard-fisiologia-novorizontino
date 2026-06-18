@@ -349,12 +349,12 @@ export default function CmjReport({ comColeta = [], zoneCounts = {}, playerPosit
               <div style={{ ...kicker, marginBottom: 10, color: GREEN }}>Top 5 Maiores Saltos</div>
               {d.top5Maiores.map((a, i) => (
                 <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ width: 16, fontWeight: 900, color: TXT3, fontSize: 12 }}>{i + 1}</span>
-                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{first2(a.name)}</span>
-                  <div style={{ width: 90, height: 8, background: CARD2, borderRadius: 4, overflow: 'hidden' }}>
+                  <span style={{ width: 16, fontWeight: 900, color: TXT3, fontSize: 12, flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, minWidth: 0, wordBreak: 'break-word', lineHeight: 1.2 }}>{first2(a.name)}</span>
+                  <div style={{ width: 90, height: 8, background: CARD2, borderRadius: 4, overflow: 'hidden', flexShrink: 0 }}>
                     <div style={{ width: `${(a.ultima.media / maxMedia) * 100}%`, height: '100%', background: GREEN }} />
                   </div>
-                  <span style={{ width: 52, textAlign: 'right', fontWeight: 900, fontSize: 12 }}>{a.ultima.media} cm</span>
+                  <span style={{ width: 52, textAlign: 'right', fontWeight: 900, fontSize: 12, flexShrink: 0 }}>{a.ultima.media} cm</span>
                 </div>
               ))}
             </div>
@@ -362,12 +362,12 @@ export default function CmjReport({ comColeta = [], zoneCounts = {}, playerPosit
               <div style={{ ...kicker, marginBottom: 10, color: RED }}>Top 5 Menores Saltos</div>
               {d.top5Menores.map((a, i) => (
                 <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ width: 16, fontWeight: 900, color: TXT3, fontSize: 12 }}>{i + 1}</span>
-                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{first2(a.name)}</span>
-                  <div style={{ width: 90, height: 8, background: CARD2, borderRadius: 4, overflow: 'hidden' }}>
+                  <span style={{ width: 16, fontWeight: 900, color: TXT3, fontSize: 12, flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, minWidth: 0, wordBreak: 'break-word', lineHeight: 1.2 }}>{first2(a.name)}</span>
+                  <div style={{ width: 90, height: 8, background: CARD2, borderRadius: 4, overflow: 'hidden', flexShrink: 0 }}>
                     <div style={{ width: `${(a.ultima.media / maxMedia) * 100}%`, height: '100%', background: RED }} />
                   </div>
-                  <span style={{ width: 52, textAlign: 'right', fontWeight: 900, fontSize: 12 }}>{a.ultima.media} cm</span>
+                  <span style={{ width: 52, textAlign: 'right', fontWeight: 900, fontSize: 12, flexShrink: 0 }}>{a.ultima.media} cm</span>
                 </div>
               ))}
             </div>
@@ -403,19 +403,19 @@ export default function CmjReport({ comColeta = [], zoneCounts = {}, playerPosit
                   const slice = col === 0 ? d.ranking.slice(0, half) : d.ranking.slice(half)
                   const offset = col === 0 ? 0 : half
                   return (
-                    <div key={col} style={{ flex: 1 }}>
+                    <div key={col} style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', fontSize: 9, fontWeight: 800, letterSpacing: 1, color: TXT3, textTransform: 'uppercase', paddingBottom: 5, borderBottom: `1px solid ${BORDER}` }}>
-                        <div style={{ width: 22 }}>#</div>
-                        <div style={{ flex: 1 }}>Atleta</div>
-                        <div style={{ width: 46, textAlign: 'right' }}>CMJ</div>
-                        <div style={{ width: 64, textAlign: 'right' }}>Faixa</div>
+                        <div style={{ width: 22, flexShrink: 0 }}>#</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>Atleta</div>
+                        <div style={{ width: 46, textAlign: 'right', flexShrink: 0 }}>CMJ</div>
+                        <div style={{ width: 64, textAlign: 'right', flexShrink: 0 }}>Faixa</div>
                       </div>
                       {slice.map((a, i) => (
                         <div key={a.name} style={{ display: 'flex', alignItems: 'center', fontSize: 11.5, padding: '4.5px 0', borderBottom: `1px solid ${CARD2}` }}>
-                          <div style={{ width: 22, fontWeight: 900, color: TXT3 }}>{offset + i + 1}</div>
-                          <div style={{ flex: 1, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{first2(a.name)}</div>
-                          <div style={{ width: 46, textAlign: 'right', fontWeight: 900 }}>{a.ultima.media}</div>
-                          <div style={{ width: 64, textAlign: 'right', fontWeight: 800, fontSize: 10, color: faixaColor(a.ultima.media) }}>{faixaLabel(a.ultima.media)}</div>
+                          <div style={{ width: 22, fontWeight: 900, color: TXT3, flexShrink: 0 }}>{offset + i + 1}</div>
+                          <div style={{ flex: 1, fontWeight: 700, minWidth: 0, wordBreak: 'break-word', lineHeight: 1.2 }}>{first2(a.name)}</div>
+                          <div style={{ width: 46, textAlign: 'right', fontWeight: 900, flexShrink: 0 }}>{a.ultima.media}</div>
+                          <div style={{ width: 64, textAlign: 'right', fontWeight: 800, fontSize: 10, color: faixaColor(a.ultima.media), flexShrink: 0 }}>{faixaLabel(a.ultima.media)}</div>
                         </div>
                       ))}
                     </div>
