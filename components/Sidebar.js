@@ -66,16 +66,6 @@ const NAV_ITEMS = [
     ),
   },
   {
-    id: 'rtp',
-    titulo: 'RTP — Retorno de Lesão',
-    rota: '/fisiologia/rtp',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-    ),
-  },
-  {
     id: 'exposicao',
     titulo: 'Exposição à Velocidade',
     rota: '/fisiologia/exposicao',
@@ -133,6 +123,17 @@ const NAV_ITEMS = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+  },
+
+  {
+    id: 'rtp',
+    titulo: 'RTP — Retorno de Lesão',
+    rota: '/fisiologia/rtp',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.5 4.75a6.75 6.75 0 019 0l.75.75.75-.75a2.25 2.25 0 013.182 3.182l-.75.75.75.75a6.75 6.75 0 010 9l-.75.75.75.75a2.25 2.25 0 01-3.182 3.182l-.75-.75-.75.75a6.75 6.75 0 01-9 0l-.75-.75-.75.75a2.25 2.25 0 01-3.182-3.182l.75-.75-.75-.75a6.75 6.75 0 010-9l.75-.75-.75-.75A2.25 2.25 0 016.75 4.75l.75.75.75-.75z" />
       </svg>
     ),
   },
