@@ -126,17 +126,6 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-
-  {
-    id: 'rtp',
-    titulo: 'RTP — Retorno de Lesão',
-    rota: '/fisiologia/rtp',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.5 4.75a6.75 6.75 0 019 0l.75.75.75-.75a2.25 2.25 0 013.182 3.182l-.75.75.75.75a6.75 6.75 0 010 9l-.75.75.75.75a2.25 2.25 0 01-3.182 3.182l-.75-.75-.75.75a6.75 6.75 0 01-9 0l-.75-.75-.75.75a2.25 2.25 0 01-3.182-3.182l.75-.75-.75-.75a6.75 6.75 0 010-9l.75-.75-.75-.75A2.25 2.25 0 016.75 4.75l.75.75.75-.75z" />
-      </svg>
-    ),
-  },
   {
     id: 'relatorios',
     titulo: 'Relatórios',
@@ -164,6 +153,17 @@ const NAV_ITEMS = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+
+  {
+    id: 'rtp',
+    titulo: 'RTP',
+    rota: '/fisiologia/rtp',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-3-3v6m9-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
   },
